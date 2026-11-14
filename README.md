@@ -79,10 +79,10 @@ To run the tests: `uv run --extra agent pytest` (57 tests).
 - **Models:**
   - Claude Fable 5.2 through the Anthropic API, using the tool runner and code execution. Claude
     Opus 5.5 is optional.
-  - The drone's learned models are ours and are trained online in every flight. No pretrained
+  - The drone's learned models are mine and are trained online in every flight. No pretrained
     weights.
 - **APIs:** Anthropic, the Linkup Search API, and Databricks MLflow.
-- **Datasets:** none. All flight data comes from our simulator.
+- **Datasets:** none. All flight data comes from my simulator.
 - **Libraries:** JAX, NumPy, the anthropic SDK, MLflow, three.js (r128) and pytest.
 
 ## Project structure

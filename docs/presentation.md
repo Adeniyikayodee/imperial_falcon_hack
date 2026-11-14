@@ -10,7 +10,7 @@ http://localhost:8765. Then either:
 **0:00 to 0:20. The problem.** Show the 3D corridor.
 
 > "Drones inspect live power lines a metre from the wire, in wind they can't see. Someone has to
-> clear them to fly. We built an agent that does that job, and we built it so you can trust it."
+> clear them to fly. I built an agent that does that job, and I built it so you can trust it."
 
 **0:20 to 0:50. The brief and the forecast.** Point to the brief and the Linkup result.
 
@@ -26,7 +26,7 @@ http://localhost:8765. Then either:
 **1:20 to 1:50. The physics.**
 
 > "Drag alone predicts more margin than the drone has. The agent measures the reason: rotor drag
-> acts above the centre of mass and pitches the drone back, which costs it tilt. We checked by
+> acts above the centre of mass and pitches the drone back, which costs it tilt. I checked by
 > removing that torque in the simulator, and the edge moves up."
 
 **1:50 to 2:20. The report.** Point to the green stamp and hover over a citation.
@@ -51,6 +51,6 @@ http://localhost:8765. Then either:
 - **Why trust the simulator?** Its tests check the rigid body against closed forms, the turbulence
   against surface-layer statistics, and the learner's energy bound for random weights. The learner
   is never tested on its own equation, because the true air includes effects it can't represent.
-- **What was built before the event?** The simulator core, on 12 and 13 November. The agent, the
-  checker, the integrations and the unified wind were built here.
+- **What was built before the event?** A prototype of the flight simulator. The agent, the checker,
+  the integrations and the unified wind I built here.
 - **What does a mission cost?** About $3 to $6 on Fable 5.2, and about half that on Opus 5.5.
