@@ -94,6 +94,3 @@ scripts/  demo server with recording and replay, envelope sweep
 web/      3D demo page
 docs/     physics, presentation script, sample mission
 ```
-
-The simulator core was prototyped on 12 and 13 November, before the event; the agent and
-everything around it was built at the hackathon.
