@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Falcon Line Inspection</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
+<script src="/field.js"></script>
+<script src="/quad.js"></script>
+<style>
+/* Layout: a daylight 3D transmission corridor; two numbers; a few controls. */
+:root {
+  --bg: #f2f4f1; --card: #ffffff; --ink: #121a22; --muted: #5d6b78; --line: #dde3df;
+  --none: #e8590c; --nn: #8b3fd9; --ph: #1f5fd1; --bad: #c8372d; --warn: #c27a00; --good: #1e8a55;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { margin: 0 }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.45 }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 14px 22px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 12px }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px }
+h1 { font-size: clamp(22px, 2.8vw, 32px); line-height: 1.1; margin: 0; font-weight: 600 }
+.sub { margin: 0; color: var(--muted) }
+.conn { font: 500 13px var(--mono); color: var(--muted); display: flex; gap: 8px; align-items: center }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad) }
+.dot.on { background: var(--good) }
+.view { position: relative; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; height: min(66vh, 700px); min-height: 420px;
+  background: linear-gradient(#6fa6d8 0%, #a9cbe8 45%, #dbe7ee 72%, #e6ece9 100%) }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none }
+.ov { position: absolute; pointer-events: none }
+.hud { left: 12px; top: 12px; display: grid; gap: 6px; justify-items: start; max-width: calc(100% - 200px) }
+.wind { font-weight: 600; font-size: 20px; font-variant-numeric: tabular-nums; background: rgba(255,255,255,.9); border-radius: 10px; padding: 6px 12px }
+.wind small { display: block; font: 500 12px var(--mono); color: #26323d }
+.cams { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: rgba(255,255,255,.92) }
+.seg button { font: 500 14px var(--body); color: var(--muted); background: none; border: 0; padding: 7px 12px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #fff }
+.caption { left: 50%; bottom: 14px; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); background: rgba(18,26,34,.84); color: #fff; border-radius: 12px; padding: 8px 16px; text-align: center; display: grid; gap: 2px }
+.caption b { font-size: 17px } .caption span { font-size: 14px; color: #d7e0e8 }
+.key { display: flex; flex-wrap: wrap; gap: 3px 10px; background: rgba(255,255,255,.82); border-radius: 8px; padding: 4px 9px; font: 500 11px var(--mono); color: #26323d; pointer-events: auto; cursor: help }
+.key i { display: inline-block; width: 12px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px }
+.key i.ring { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,59,48,.18); border: 1.5px solid #ff3b30 }
+/* labels sit on opposite sides of their drone, so they never stack even when the drones overlap on screen */
+.tag { position: absolute; transform: translate(26px, -50%); font: 600 14px var(--body); padding: 3px 10px; border-radius: 7px; color: #fff; white-space: nowrap; font-variant-numeric: tabular-nums; box-shadow: 0 1px 4px rgba(0,0,0,.25) }
+.tag.left { transform: translate(calc(-100% - 26px), -50%) } .tag.top { transform: translate(-50%, calc(-100% - 24px)) }
+.tag.danger { background: var(--bad) !important }
+/* screen-space ring around each drone: findable at any zoom, solid learner, dotted neural net, dashed no model */
+.mark { position: absolute; width: 34px; height: 34px; border-radius: 50%; transform: translate(-50%, -50%); border: 3px solid currentColor; box-shadow: 0 0 0 2px rgba(255,255,255,.75), inset 0 0 0 2px rgba(255,255,255,.75) }
+.mark.none { border-style: dashed } .mark.mlp { border-style: dotted }
+.mark.danger { color: var(--bad) !important }
+.wait { inset: 0; display: grid; place-items: center; color: var(--muted); font: 500 15px var(--mono); background: rgba(242,244,241,.88) }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr); gap: 12px }
+.chart { align-content: start }
+.chart .who { font-weight: 500; color: var(--muted); font-size: 14px; flex-wrap: wrap; justify-content: flex-start; gap: 2px 14px }
+.chart .who b { color: var(--ink); font-weight: 600 }
+.ck { display: flex; gap: 12px; font: 500 12px var(--mono) } .ck i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px }
+#chart { width: 100%; height: 104px; display: block; margin-top: 4px }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 18px; display: grid; gap: 2px }
+.card.danger { border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad) }
+.who { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600 }
+.who span { display: flex; align-items: center; gap: 10px }
+.sw { width: 14px; height: 14px; border-radius: 50%; flex: none }
+.chip { font: 500 12px var(--mono); padding: 1px 9px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap }
+.chip.ok { color: var(--good) } .chip.warn { color: var(--warn) } .chip.bad { color: var(--bad) }
+.num { font-size: clamp(30px, 3.6vw, 44px); font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums }
+.num small { font-size: 16px; font-weight: 500; color: var(--muted); margin-left: 6px }
+.worst { font: 500 13px var(--mono); color: var(--muted); white-space: nowrap }
+.meta { font: 500 13px var(--mono); color: var(--muted) }
+.worst b { font-size: 17px; margin-left: 4px; color: var(--ink) } .worst b.bad { color: var(--bad) }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 16px }
+.ctl { display: flex; align-items: center; gap: 10px; flex: 1 1 200px; min-width: 0 }
+.ctl label { font-weight: 500; white-space: nowrap }
+.ctl input { flex: 1; min-width: 0; accent-color: var(--ph) }
+.ctl output { font: 500 15px var(--mono); min-width: 6ch; text-align: right }
+button.act { font: 600 16px var(--body); border-radius: 10px; padding: 10px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink) }
+#demo { background: var(--ink); color: #fff; border-color: var(--ink) }
+#gust { background: var(--ph); color: #fff; border-color: var(--ph) }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ph); outline-offset: 2px }
+.eng { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 16px; display: grid; gap: 8px }
+.eng form { display: flex; gap: 10px }
+.eng input { flex: 1; min-width: 0; font: 15px var(--body); padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink) }
+.eng-log { font: 500 13px var(--mono); max-height: 220px; overflow: auto; display: grid; gap: 4px; white-space: pre-wrap }
+.eng-log .q { font: 600 14px var(--body) } .eng-log .tool { color: var(--muted) } .eng-log .err { color: var(--bad) }
+#mis-go { background: var(--ph); color: #fff; border-color: var(--ph) }
+.eng-log .note { font: 15px var(--body); color: var(--ink) } .eng-log .code { color: #3d4b58; background: var(--bg); border-radius: 8px; padding: 6px 10px }
+.eng-log .run { color: var(--ink) } .eng-log .rej { color: var(--bad); font-weight: 600 }
+.mission { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px }
+.steps { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1 }
+.steps span { font: 500 12px var(--mono); padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted) }
+.steps span.on { border-color: var(--ph); color: var(--ph) } .steps span.done { background: var(--ph); border-color: var(--ph); color: #fff }
+#env { width: 100%; height: 220px; display: block }
+.report { font-size: 15px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; overflow: auto; max-height: 460px }
+.report h2, .report h3 { font-size: 16px; margin: 10px 0 4px } .report table { border-collapse: collapse; font-size: 13px; margin: 6px 0 }
+.report td, .report th { border-bottom: 1px solid var(--line); padding: 3px 8px; text-align: left }
+.report .stamp { font: 600 12px var(--mono); color: var(--good); border: 1px solid var(--good); border-radius: 99px; padding: 2px 10px; display: inline-block }
+.cite { font: 500 11px var(--mono); color: var(--good); background: rgba(30,138,85,.1); border-radius: 5px; padding: 0 4px; cursor: help }
+.cite.pred { color: var(--warn); background: rgba(194,122,0,.1) }
+@media (max-width: 900px) { .mission { grid-template-columns: 1fr } }
+@media (max-width: 1100px) { .cards { grid-template-columns: repeat(3, minmax(0, 1fr)) } .chart { grid-column: 1 / -1 } }
+@media (max-width: 640px) { .cards { grid-template-columns: 1fr } .hud { max-width: calc(100% - 24px) } .key { display: none } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Inspecting a live power line in the wind</h1>
+      <p class="sub">One wind, three drones, the same controller with integral action. <b style="color:var(--none)">No model</b>, an unconstrained <b style="color:var(--nn)">neural net</b>, and the energy-bounded <b style="color:var(--ph)">learner</b>.</p>
+    </div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="conn">connecting</span></div>
+  </header>
+
+  <div class="view" id="view">
+    <canvas id="gl" aria-label="3D transmission corridor with a quadcopter inspecting the conductors in wind"></canvas>
+    <div class="ov hud">
+      <div class="wind"><span id="w-speed">Wind 0.0 m/s</span><small id="w-note">calm</small></div>
+      <div class="key" title="Arrows are forces on each drone. Streaks are the air, coloured by speed; trees sway with the same wind. Drones drawn 3× size."><span><i style="background:#fff;outline:1px solid #9aa"></i>wind push</span><span><i style="background:linear-gradient(90deg,#8b3fd9 50%,#2f6fe4 50%)"></i>learned</span><span><i style="background:#1ea65a"></i>thrust</span><span><i style="background:linear-gradient(90deg,#fff,#0a4a9e);outline:1px solid #ccd"></i>air: still → fast</span><span><i class="ring"></i>1 m buffer</span></div>
+    </div>
+    <div class="ov caption" id="caption" hidden><b id="cap-t"></b><span id="cap-s"></span></div>
+    <div class="cams"><div class="seg" role="group" aria-label="Camera"><button id="cam-follow" aria-pressed="true">Follow</button><button id="cam-over" aria-pressed="false">Overview</button></div></div>
+    <div class="ov" id="tags" style="inset:0"></div>
+    <div class="ov wait" id="wait">waiting for the simulator · uv run python scripts/live.py</div>
+  </div>
+
+  <div class="cards" id="cards">
+    <div class="card chart"><div class="who"><span><b>Tracking error</b>&nbsp;· last 40 s, log scale</span><span class="ck" id="ck"></span></div>
+      <canvas id="chart" aria-label="Distance of each drone from its planned pass over the last 40 seconds, log scale"></canvas></div>
+  </div>
+
+  <div class="controls">
+    <button class="act" id="demo">Run demo</button>
+    <div class="ctl"><label for="speed">Wind at 10 m</label><input id="speed" type="range" min="0" max="7" step="0.5" value="0"><output id="speed-o">0.0 m/s</output></div>
+    <div class="ctl"><label for="dir">From</label><input id="dir" type="range" min="-180" max="180" step="15" value="90"><output id="dir-o">south</output></div>
+    <div class="seg" role="group" aria-label="Learning speed"><button id="lr-gentle" aria-pressed="true">Normal learning</button><button id="lr-aggressive" aria-pressed="false">10× faster</button></div>
+    <button class="act" id="gust">Gust</button>
+    <button class="act" id="reset">Reset</button>
+  </div>
+
+  <div class="eng">
+    <div class="who"><span>Flight engineer&nbsp;<span class="meta" id="eng-model">Claude</span></span><span class="chip" id="eng-state">checking</span></div>
+    <form id="eng-form"><input id="eng-q" aria-label="Question or mission brief for the flight engineer" placeholder="Checking for Claude credentials..." disabled><button class="act" id="eng-go" disabled>Ask</button><button class="act" id="mis-go" type="button" disabled title="Identify, predict, expand the envelope, report with every number checked, then fly the limit live">Clear for flight</button></form>
+    <div class="mission" id="mission" hidden>
+      <div class="steps" id="steps"></div>
+      <div class="eng-log" id="eng-log" style="max-height:520px"></div>
+      <div style="display:grid;gap:10px;align-content:start">
+        <div><div class="meta" id="env-t">Envelope · tracking error vs wind on the mission pass</div><canvas id="env" aria-label="Tracking error of each controller against wind speed, crashes marked with a cross"></canvas><div class="ck" id="env-k"></div></div>
+        <div class="report" id="report" hidden></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DRONES = [
+  { key: "none", color: "--none", label: "No model", title: "No model", side: "left", ghost: true },
+  { key: "mlp", color: "--nn", label: "Neural net", title: "Neural net · unconstrained", side: "top" },
+  { key: "ph", color: "--ph", label: "Learner", title: "Learner · energy-bounded", side: "right" },
+];
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const rad = (d) => d * Math.PI / 180;
+const S = 3, BUFFER = 1.0; // drawn drone scale; safety buffer radius around each conductor, m
+const chartCard = document.querySelector(".chart");
+for (const d of DRONES) {
+  chartCard.insertAdjacentHTML("beforebegin", `<div class="card" id="card-${d.key}"><div class="who"><span><span class="sw" style="background:var(${d.color})"></span>${d.title}</span><span class="chip" id="chip-${d.key}"></span></div>
+    <div class="num"><span id="err-${d.key}">–</span><small>cm off the pass</small></div>
+    <div class="worst">wire <b id="clr-${d.key}">–</b> · closest <b id="min-${d.key}">–</b></div></div>`);
+  $("ck").insertAdjacentHTML("beforeend", `<span><i style="background:var(${d.color})"></i>${d.label.toLowerCase()}</span>`);
+}
+
+// ---------- controls ----------
+const ctl = { speed: 0, dir: 90, learning: "gentle" }; // dir: where the wind blows toward; 90 = toward the line
+let sendTimer = null, lastLocal = 0;
+const post = (b) => fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).catch(() => {});
+function sync() { $("speed").value = ctl.speed; $("speed-o").textContent = `${ctl.speed.toFixed(1)} m/s`; $("dir").value = ctl.dir; $("dir-o").textContent = compass(ctl.dir);
+  for (const k of ["gentle", "aggressive"]) $(`lr-${k}`).setAttribute("aria-pressed", String(ctl.learning === k)); }
+function send() { lastLocal = performance.now(); clearTimeout(sendTimer); sendTimer = setTimeout(() => post({ mean: [ctl.speed * Math.cos(rad(ctl.dir)), ctl.speed * Math.sin(rad(ctl.dir))], gust: ctl.speed > 0 ? 1.0 : 0, learning: ctl.learning }), 30); }
+// 4 m/s plus a 2 m/s gust holds at every turbulence phase tested; at 5 m/s turbulence peaks reach the 34 deg tilt limit
+const gust = () => { const d = rad(ctl.dir); post({ burst: { speed: 2, dir: [Math.cos(d), Math.sin(d)] } }); };
+const resetRun = () => { post({ reset: true }); hist.length = 0; for (const d of DRONES) { trails[d.key].length = 0; worst[d.key] = Infinity; } };
+$("speed").oninput = (e) => { stopDemo(); ctl.speed = +e.target.value; sync(); send(); };
+$("dir").oninput = (e) => { stopDemo(); ctl.dir = +e.target.value; sync(); send(); };
+$("gust").onclick = gust;
+const learn = (k) => { ctl.learning = k; sync(); send(); };
+for (const k of ["gentle", "aggressive"]) $(`lr-${k}`).onclick = () => { stopDemo(); learn(k); };
+$("reset").onclick = () => { stopDemo(); resetRun(); };
+addEventListener("keydown", (e) => { if (e.key === " " && e.target.tagName !== "INPUT") { e.preventDefault(); gust(); } });
+
+// ---------- scripted demo: only the real controls, in order ----------
+let demoTimers = [];
+function caption(t, s) { $("caption").hidden = !t; $("cap-t").textContent = t || ""; $("cap-s").textContent = s || ""; }
+function stopDemo() { demoTimers.forEach(clearTimeout); demoTimers = []; caption(); $("demo").textContent = "Run demo"; }
+function runDemo() {
+  stopDemo(); $("demo").textContent = "Stop demo";
+  const at = (s, f) => demoTimers.push(setTimeout(f, s * 1000));
+  const tally = () => DRONES.map((d) => `${d.label} ${(100 * rms(d.key, 10)).toFixed(1)}`).join(" · ") + " cm";
+  at(0, () => { ctl.speed = 0; ctl.dir = 90; learn("gentle"); resetRun(); setCam("follow"); caption("1 · Calm air", "Three drones, one pass, one controller. Only the wind model differs."); });
+  at(7, () => { ctl.speed = 4; sync(); send(); caption("2 · 4 m/s toward the line", "Integral control holds all three on the pass. The learner tracks tightest."); });
+  at(18, () => { gust(); caption("3 · Gust", "A 2 m/s gust front rolls in through the trees."); });
+  at(24, () => { gust(); caption("4 · Another gust", "Watch the tracking-error chart."); });
+  at(29.5, () => caption("Normal learning · last 10 s", tally()));
+  at(34, () => { learn("aggressive"); caption("5 · Learn 10× faster", "The neural net chases sensor noise. The energy bound limits the learner's damage."); });
+  at(48, () => {
+    caption("10× learning · last 10 s", `${tally()}. Learn gently: no model is steadiest here.`);
+    $("demo").textContent = "Run demo";
+  });
+}
+$("demo").onclick = () => (demoTimers.length && $("demo").textContent === "Stop demo" ? stopDemo() : runDemo());
+
+// ---------- wind field: same formula as field() in falcon/live.py ----------
+let field = null;
+// falcon/atmos.py wind(): log profile with height plus von Karman turbulence frozen into the air
+const windAt = (x, y, z, t, out) => falconWind(field, x, y, z, t, out);
+
+// ---------- line geometry, placed from the route the simulator flies ----------
+// Double-circuit line along x. The near circuit hangs 1.8 m beyond the pass centreline (1.2 m from its
+// near edge); its middle phase sags to flight height at mid-span, which is where the pass is flown.
+const L = { span: 60, sag: 4, x0: 0, yNear: 0, yTower: 0, arm: 3.5, mid: [0, 0, 0], earth: 0, earthSag: 3, insul: 1.3 };
+function placeLine(c) {
+  L.x0 = c.x; L.yNear = c.y + 1.8; L.yTower = L.yNear + L.arm;
+  L.mid = [c.z - 4.5, c.z, c.z + 4.5]; L.earth = c.z + 12;
+}
+const sagZ = (x, midZ, sag) => { const h = L.span / 2, u = x - L.x0, xi = ((u + h) % L.span + L.span) % L.span - h; return midZ + sag * (xi / h) ** 2; };
+const conductors = () => { const out = []; for (const side of [-1, 1]) for (const m of L.mid) out.push({ y: L.yTower + side * L.arm, mid: m }); return out; };
+function nearest(p) { // nearest conductor point at the drone's x (spans are long, so this is the perpendicular foot)
+  let best = { d: Infinity }; for (const c of conductors()) { const z = sagZ(p[0], c.mid, L.sag), d = Math.hypot(p[1] - c.y, p[2] - z); if (d < best.d) best = { d, x: p[0], y: c.y, z }; }
+  return best;
+}
+
+// ---------- renderer, scene, cameras ----------
+const canvas = $("gl"), renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xd6e3ea, 60, 420);
+const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.05, 1200); camera.up.set(0, 0, 1);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 0.3; controls.maxDistance = 140;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+scene.add(new THREE.HemisphereLight(0xd8e9ff, 0x56653a, 0.9));
+const sun = new THREE.DirectionalLight(0xfff1dc, 1.75);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004;
+Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 160 });
+scene.add(sun, sun.target);
+
+let rs = 3; const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
+// grass with large field patches baked into one texture
+const grass = tex(1024, 1024, (g, w, h) => {
+  g.fillStyle = "#6f8e45"; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 26; i++) { g.fillStyle = ["#7c9a4c", "#66853f", "#89a259", "#5f7d3b", "#93a764"][i % 5]; g.globalAlpha = 0.45; g.fillRect(rnd() * w, rnd() * h, 120 + rnd() * 260, 90 + rnd() * 220); }
+  g.globalAlpha = 1;
+  for (let i = 0; i < 60000; i++) { const v = rnd(); g.fillStyle = `rgba(${70 + v * 60 | 0},${100 + v * 60 | 0},${40 + v * 30 | 0},.35)`; g.fillRect(rnd() * w, rnd() * h, 2, 3); }
+}, [24, 24]);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), new THREE.MeshStandardMaterial({ map: grass, roughness: 1 }));
+ground.receiveShadow = true; scene.add(ground);
+const gravel = tex(512, 64, (g, w, h) => { g.fillStyle = "#b8ad97"; g.fillRect(0, 0, w, h); for (let i = 0; i < 9000; i++) { const v = rnd(); g.fillStyle = `rgba(${150 + v * 70 | 0},${140 + v * 65 | 0},${120 + v * 55 | 0},.5)`; g.fillRect(rnd() * w, rnd() * h, 2, 2); } }, [80, 1]);
+const track = new THREE.Mesh(new THREE.PlaneGeometry(1600, 3.5), new THREE.MeshStandardMaterial({ map: gravel, roughness: 1 }));
+track.position.z = 0.02; track.receiveShadow = true; scene.add(track);
+
+// ---------- pylons: all steel members in one instanced mesh ----------
+const members = [];
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+function member(a, b, r) { members.push([a, b, r]); }
+function pylon(px) {
+  const yt = L.yTower, peak = L.earth, armZ = L.mid.map((m) => m + L.sag + L.insul), neck = armZ[0] - 1.5;
+  const half = (z) => z < neck ? 3.4 - (3.4 - 1.1) * z / neck : 1.1 - 0.5 * (z - neck) / (peak - neck);
+  const levels = []; for (let z = 0; z < neck; z += 2.6) levels.push(z); levels.push(neck, ...armZ, peak);
+  const corner = (z, i) => { const h = half(z); return V(px + (i & 1 ? h : -h), yt + (i & 2 ? h : -h), z); };
+  for (let l = 0; l < levels.length - 1; l++) {
+    const z0 = levels[l], z1 = levels[l + 1];
+    for (let i = 0; i < 4; i++) member(corner(z0, i), corner(z1, i), 0.16);
+    for (const [i, j] of [[0, 1], [1, 3], [3, 2], [2, 0]]) { member(corner(z1, i), corner(z1, j), 0.08); member(corner(z0, i), corner(z1, j), 0.06); member(corner(z0, j), corner(z1, i), 0.06); }
+  }
+  for (const z of armZ) for (const side of [-1, 1]) {
+    const h = half(z), tip = V(px, yt + side * L.arm, z);
+    member(V(px - h, yt + side * h, z), tip, 0.1); member(V(px + h, yt + side * h, z), tip, 0.1);
+    member(V(px - h, yt + side * h, z - 1.2), tip, 0.07); member(V(px + h, yt + side * h, z - 1.2), tip, 0.07);
+  }
+  member(V(px - 0.6, yt, peak), V(px + 0.6, yt, peak), 0.1);
+}
+function buildLine() {
+  const towers = [-1.5, -0.5, 0.5, 1.5].map((k) => L.x0 + k * L.span);
+  towers.forEach(pylon);
+  const steel = new THREE.MeshStandardMaterial({ color: 0xa8afb4, metalness: 0.7, roughness: 0.45 });
+  const beams = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), steel, members.length);
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Z = V(0, 0, 1);
+  members.forEach(([a, b, r], i) => { const d = b.clone().sub(a), len = d.length(); Q.setFromUnitVectors(Z, d.normalize()); M.compose(a.clone().lerp(b, 0.5), Q, V(r, r, len)); beams.setMatrixAt(i, M); });
+  beams.castShadow = true; scene.add(beams);
+  // insulator strings: glass discs hanging from each crossarm tip
+  const glassGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.05, 18); glassGeo.rotateX(Math.PI / 2);
+  const glass = new THREE.InstancedMesh(glassGeo, new THREE.MeshStandardMaterial({ color: 0x5e8c7c, roughness: 0.2, metalness: 0.1 }), towers.length * 6 * 9);
+  let n = 0; for (const px of towers) for (const c of conductors()) for (let k = 0; k < 9; k++) { M.compose(V(px, c.y, c.mid + L.sag + L.insul - 0.12 - k * 0.13), new THREE.Quaternion(), V(1, 1, 1)); glass.setMatrixAt(n++, M); }
+  glass.castShadow = true; scene.add(glass);
+  // conductors across three spans, the earth wire on the peak
+  const wire = (y, mid, sag, r, color) => {
+    const pts = []; for (let x = towers[0]; x <= towers[3] + 1e-6; x += 1) pts.push(V(x, y, sagZ(x, mid, sag)));
+    const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 540, r, 7, false), new THREE.MeshStandardMaterial({ color, metalness: 0.65, roughness: 0.35 }));
+    m.castShadow = true; scene.add(m);
+  };
+  for (const c of conductors()) wire(c.y, c.mid, L.sag, 0.028, 0x3d4348);
+  wire(L.yTower, L.earth - L.earthSag, L.earthSag, 0.016, 0x70767c);
+  // orange aircraft-warning spheres on the earth wire, and Stockbridge dampers near each clamp
+  const ball = new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.5 });
+  for (let k = -1; k <= 1; k++) for (const f of [-0.25, 0.25]) { const x = L.x0 + k * L.span + f * L.span; const s = new THREE.Mesh(new THREE.SphereGeometry(0.45, 20, 14), ball); s.position.set(x, L.yTower, sagZ(x, L.earth - L.earthSag, L.earthSag) - 0.45); s.castShadow = true; scene.add(s); }
+  const dmp = new THREE.MeshStandardMaterial({ color: 0x8b9298, metalness: 0.7, roughness: 0.4 });
+  for (const px of towers) for (const c of conductors()) for (const s of [-1, 1]) {
+    const x = px + s * 1.6, z = sagZ(x, c.mid, L.sag);
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 6), dmp); bar.position.set(x, c.y, z - 0.12); scene.add(bar);
+    for (const e of [-0.25, 0.25]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.14, 10), dmp); w.rotation.z = Math.PI / 2; w.position.set(x + e, c.y, z - 0.12); scene.add(w); }
+  }
+  // 1 m safety buffer around the near circuit in the drone's span
+  for (const m of L.mid) {
+    const pts = []; for (let x = -26; x <= 26; x += 1) pts.push(V(L.x0 + x, L.yNear, sagZ(L.x0 + x, m, L.sag)));
+    const b = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 120, BUFFER, 28, false), new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0.045, depthWrite: false }));
+    scene.add(b); buffers.push(b);
+  }
+  track.position.y = L.yTower;
+}
+const buffers = [];
+
+// ---------- landscape: hills, mixed trees, clouds, keeping the corridor clear ----------
+const forest = { trees: [] };
+// each tree leans downwind by an angle growing with the square of the wind at its crown, plus flutter
+function swayTrees(t) {
+  if (!forest.trunk || !field) return;
+  const M = new THREE.Matrix4(), R = new THREE.Quaternion(), Qc = new THREE.Quaternion(), ax = new THREE.Vector3(), off = new THREE.Vector3(), P = new THREE.Vector3(), Sc = new THREE.Vector3();
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0), w = [0, 0, 0];
+  forest.trees.forEach((tr, i) => {
+    windAt(tr.x, tr.y, 6 * tr.k, t, w);
+    const s = Math.hypot(w[0], w[1]), lean = Math.min(0.3, 0.0035 * s * s + 0.012 * s * Math.sin(2.1 * t + tr.phase));
+    if (s > 0.05) ax.set(-w[1] / s, w[0] / s, 0); else ax.set(1, 0, 0);
+    R.setFromAxisAngle(ax, lean); Qc.copy(R).multiply(forest.q);
+    const put = (mesh, h, sc, on) => { if (!on) { mesh.setMatrixAt(i, zero); return; } off.set(0, 0, h * tr.k).applyQuaternion(R); P.set(tr.x, tr.y, 0).add(off); M.compose(P, Qc, Sc.set(tr.k, tr.k * sc, tr.k)); mesh.setMatrixAt(i, M); };
+    put(forest.trunk, 1.5, 1, true); put(forest.cone, 6.5, 1, tr.conifer); put(forest.crown, 5.2, 0.9, !tr.conifer);
+  });
+  forest.trunk.instanceMatrix.needsUpdate = forest.cone.instanceMatrix.needsUpdate = forest.crown.instanceMatrix.needsUpdate = true;
+}
+function buildLand(c) {
+  const hill = new THREE.MeshStandardMaterial({ color: 0x7d9468, roughness: 1, flatShading: true });
+  for (let i = 0; i < 26; i++) {
+    const a = rnd() * Math.PI * 2, r = 260 + rnd() * 220, s = 60 + rnd() * 90;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), hill); m.scale.set(s, s * (0.7 + rnd() * 0.6), s * (0.16 + rnd() * 0.14));
+    m.position.set(c.x + Math.cos(a) * r, L.yTower + Math.sin(a) * r, 0); scene.add(m);
+  }
+  const n = 420, M = new THREE.Matrix4(), q = new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), Math.PI / 2), v = V(0, 0, 0);
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.25, 3, 6), new THREE.MeshStandardMaterial({ color: 0x5b4632, roughness: 1 }), n);
+  const cone = new THREE.InstancedMesh(new THREE.ConeGeometry(2.2, 7, 8), new THREE.MeshStandardMaterial({ color: 0x2e5a2d, roughness: 0.9 }), n);
+  const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(2.8, 1), new THREE.MeshStandardMaterial({ color: 0x4c7a34, roughness: 0.9, flatShading: true }), n);
+  trunk.castShadow = cone.castShadow = crown.castShadow = true;
+  const hide = new THREE.Matrix4().makeScale(0, 0, 0);
+  Object.assign(forest, { trunk, cone, crown, q });
+  for (let i = 0; i < n; i++) {
+    let x, y; do { x = c.x + (rnd() * 2 - 1) * 170; y = L.yTower + (rnd() * 2 - 1) * 140; } while (Math.abs(y - L.yTower) < 22);
+    const k = 0.7 + rnd() * 0.9, conifer = rnd() < 0.5;
+    M.compose(v.set(x, y, 1.5 * k), q, V(k, k, k)); trunk.setMatrixAt(i, M);
+    if (conifer) { M.compose(v.set(x, y, (3 + 3.5) * k), q, V(k, k, k)); cone.setMatrixAt(i, M); crown.setMatrixAt(i, hide); }
+    else { M.compose(v.set(x, y, (3 + 2.2) * k), q, V(k, k * 0.9, k)); crown.setMatrixAt(i, M); cone.setMatrixAt(i, hide); }
+    forest.trees.push({ x, y, k, conifer, phase: rnd() * 6.28 });
+  }
+  scene.add(trunk, cone, crown);
+  const puff = tex(256, 128, (g) => { for (let i = 0; i < 14; i++) { const x = 40 + rnd() * 176, y = 50 + rnd() * 40, r = 22 + rnd() * 30, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, "rgba(255,255,255,.95)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, 256, 128); } });
+  for (let i = 0; i < 14; i++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puff, transparent: true, depthWrite: false, fog: false, opacity: 0.85 })); const a = rnd() * Math.PI * 2, r = 200 + rnd() * 300; s.position.set(c.x + Math.cos(a) * r, L.yTower + Math.sin(a) * r, 70 + rnd() * 60); s.scale.set(120, 60, 1); scene.add(s); clouds.push(s); }
+}
+
+// ---------- the drone: Crazyflie-style micro quadcopter, real dimensions times S ----------
+
+// windsock by the access track, driven by the live wind at its tip
+const sock = new THREE.Group(); scene.add(sock);
+const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 6, 12), new THREE.MeshStandardMaterial({ color: 0xd9dcdf, metalness: 0.5, roughness: 0.4 }));
+pole.rotation.x = Math.PI / 2; pole.position.z = 3; pole.castShadow = true; sock.add(pole);
+const pivot = new THREE.Group(); pivot.position.z = 5.95; sock.add(pivot);
+const sockGeo = new THREE.CylinderGeometry(0.14, 0.3, 1.7, 20, 1, true); sockGeo.rotateZ(-Math.PI / 2); sockGeo.translate(0.85, 0, 0);
+const sockMesh = new THREE.Mesh(sockGeo, new THREE.MeshStandardMaterial({ color: 0xff6a1a, roughness: 0.7, side: THREE.DoubleSide })); sockMesh.castShadow = true; pivot.add(sockMesh);
+let sockYaw = Math.PI / 2, sockDroop = 1.25;
+
+// flowing air: particles carried by the same field, each drawing a fading tail of its recent path.
+// Two layers: a dense one around the pass, and a sparse one filling the whole valley whose tails are
+// sampled less often (longer streaks) and drawn at a constant on-screen width so distant air stays visible.
+// colour by speed, white (still) to deep blue (8 m/s); tails fade out by alpha so they read on sky and grass alike
+const W_SLOW = new THREE.Color(0xffffff), W_FAST = new THREE.Color(0x0a4a9e), wc = new THREE.Color();
+function flowLayer({ n, tr, stride, box, px, wmax, opacity }) {
+  const P = new Float32Array(n * 3), tail = new Float32Array(n * tr * 3), rib = new Float32Array(n * tr * 6), ribC = new Float32Array(n * tr * 8);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(rib, 3)); geo.setAttribute("color", new THREE.BufferAttribute(ribC, 4));
+  { const idx = []; for (let i = 0; i < n; i++) for (let k = 0; k < tr - 1; k++) { const a = (i * tr + k) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } geo.setIndex(idx); }
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
+  mesh.frustumCulled = false; scene.add(mesh);
+  const out = (i) => Math.abs(P[3 * i] - box.cx) > box.x || Math.abs(P[3 * i + 1] - box.cy) > box.y || Math.abs(P[3 * i + 2] - box.cz) > box.z;
+  function spawn(i, upwind) {
+    P[3 * i] = box.cx + (rnd() * 2 - 1) * box.x; P[3 * i + 1] = box.cy + (rnd() * 2 - 1) * box.y; P[3 * i + 2] = box.cz + (rnd() * 2 - 1) * box.z;
+    if (upwind && field) { // re-enter on the upwind faces so the flow stays evenly filled
+      const sp = Math.hypot(field.mean[0], field.mean[1]);
+      if (sp > 0.2) { const ux = field.mean[0] / sp, uy = field.mean[1] / sp; if (Math.abs(uy) > Math.abs(ux)) P[3 * i + 1] = box.cy - Math.sign(uy) * box.y * 0.98; else P[3 * i] = box.cx - Math.sign(ux) * box.x * 0.98; }
+    }
+    for (let j = 0; j < tr; j++) tail.set([P[3 * i], P[3 * i + 1], P[3 * i + 2]], (i * tr + j) * 3);
+  }
+  let tick = 0;
+  function step(t, dt) {
+    const shift = tick++ % stride === 0, w3 = [0, 0, 0];
+    for (let i = 0; i < n; i++) {
+      windAt(P[3 * i], P[3 * i + 1], P[3 * i + 2], t, w3);
+      P[3 * i] += w3[0] * dt; P[3 * i + 1] += w3[1] * dt; P[3 * i + 2] += w3[2] * dt;
+      if (out(i)) spawn(i, true);
+      const base = i * tr * 3;
+      if (shift) tail.copyWithin(base + 3, base, base + (tr - 1) * 3);
+      tail[base] = P[3 * i]; tail[base + 1] = P[3 * i + 1]; tail[base + 2] = P[3 * i + 2];
+      wc.copy(W_SLOW).lerp(W_FAST, Math.min(1, Math.hypot(w3[0], w3[1], w3[2]) / 8));
+      for (let k = 0; k < tr; k++) { // ribbon edge: perpendicular to both the path and the view, narrowing to the tail
+        const a = base + k * 3, b = base + Math.min(k + 1, tr - 1) * 3, c0 = base + Math.max(k - 1, 0) * 3;
+        const dx = tail[c0] - tail[b], dy = tail[c0 + 1] - tail[b + 1], dz = tail[c0 + 2] - tail[b + 2];
+        const vx = tail[a] - camera.position.x, vy = tail[a + 1] - camera.position.y, vz = tail[a + 2] - camera.position.z;
+        let nx = dy * vz - dz * vy, ny = dz * vx - dx * vz, nz = dx * vy - dy * vx;
+        const nl = Math.hypot(nx, ny, nz) || 1, w = Math.min(wmax, px * Math.hypot(vx, vy, vz)) * (1 - k / tr); // constant width on screen, capped
+        nx *= w / nl; ny *= w / nl; nz *= w / nl;
+        const o = (i * tr + k) * 6;
+        rib[o] = tail[a] + nx; rib[o + 1] = tail[a + 1] + ny; rib[o + 2] = tail[a + 2] + nz; rib[o + 3] = tail[a] - nx; rib[o + 4] = tail[a + 1] - ny; rib[o + 5] = tail[a + 2] - nz;
+        const q = (i * tr + k) * 8, al = 1 - k / (tr - 1);
+        ribC[q] = ribC[q + 4] = wc.r; ribC[q + 1] = ribC[q + 5] = wc.g; ribC[q + 2] = ribC[q + 6] = wc.b; ribC[q + 3] = ribC[q + 7] = al;
+      }
+    }
+    geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true;
+  }
+  return { box, mesh, step, seed: () => { for (let i = 0; i < n; i++) spawn(i, false); } };
+}
+// near: around the pass, short tails every frame; far: the whole valley from treetops to cloud base
+const flows = [
+  flowLayer({ n: 650, tr: 14, stride: 1, box: { cx: 0, cy: 0, cz: 0, x: 13, y: 7, z: 4 }, px: 0.0037, wmax: 0.022, opacity: 0.95 }),
+  flowLayer({ n: 2600, tr: 12, stride: 5, box: { cx: 0, cy: 0, cz: 16, x: 140, y: 110, z: 14 }, px: 0.0027, wmax: 0.8, opacity: 0.9 }),
+];
+const clouds = [];
+
+const arrowShaft = new THREE.CylinderGeometry(0.035, 0.035, 1, 8); arrowShaft.translate(0, 0.5, 0);
+const arrowHead = new THREE.ConeGeometry(0.11, 1, 10); arrowHead.translate(0, 0.5, 0);
+// force arrows: shaft and head along +Y, oriented and scaled to a force in newtons (1 N = 4 m)
+const FORCE = 4;
+function forceArrow(color, r) {
+  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true });
+  const shaft = new THREE.Mesh(arrowShaft, m), head = new THREE.Mesh(arrowHead, m); g.add(shaft, head); g.renderOrder = 5; g.visible = false;
+  const Y = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3();
+  g.set = (o, v) => {
+    const len = Math.hypot(v[0], v[1], v[2]) * FORCE; g.visible = len > 0.02; if (!g.visible) return;
+    d.set(v[0], v[1], v[2]).normalize(); g.position.copy(o); g.quaternion.setFromUnitVectors(Y, d);
+    const hl = Math.min(0.14, len * 0.35); shaft.scale.set(r / 0.035, len - hl, r / 0.035); head.position.y = len - hl; head.scale.set(r / 0.035, hl, r / 0.035);
+  };
+  return g;
+}
+
+// drones, pass, trails, distance lines, labels
+const drones = {}, trails = Object.fromEntries(DRONES.map((d) => [d.key, []])), worst = Object.fromEntries(DRONES.map((d) => [d.key, Infinity]));
+for (const d of DRONES) {
+  const col = new THREE.Color(css(d.color)), q = makeDrone(col, d.ghost, S); scene.add(q.g);
+  const tGeo = new THREE.BufferGeometry(); tGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(240 * 3), 3));
+  const trail = new THREE.Line(tGeo, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: d.ghost ? 0.5 : 0.85 })); scene.add(trail);
+  const reach = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(0, 0, 0), V(0, 0, 1)]), new THREE.LineDashedMaterial({ color: col, dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: d.ghost ? 0.6 : 0.95 }));
+  scene.add(reach);
+  const tag = document.createElement("div"); tag.className = `tag ${d.side}`; tag.style.background = css(d.color); $("tags").appendChild(tag);
+  const fTrue = forceArrow(0xffffff, 0.022), fHat = forceArrow(d.key === "mlp" ? col : 0x2f6fe4, 0.03), fThrust = forceArrow(0x1ea65a, 0.022);
+  scene.add(fTrue, fHat, fThrust);
+  const ring = document.createElement("div"); ring.className = `mark ${d.key}`; ring.style.color = css(d.color); $("tags").appendChild(ring);
+  drones[d.key] = { ...q, trail, reach, tag, col, fTrue, fHat, fThrust, ring };
+}
+let routeReady = false;
+fetch("/scene").then((r) => r.json()).then((s) => { if (s.scene !== "line") location.href = "/"; }).catch(() => {});
+fetch("/path").then((r) => r.json()).then((pts) => {
+  const v = pts.map((p) => V(p[0], p[1], p[2])), box = new THREE.Box3().setFromPoints(v), c = box.getCenter(V(0, 0, 0)); // exact for a closed loop, unlike the mean of a partial sample
+  placeLine(c); buildLine(); buildLand(c);
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(v, false), 500, 0.012, 8, false), new THREE.MeshBasicMaterial({ color: 0x1f5fd1, transparent: true, opacity: 0.5 })));
+  sock.position.set(c.x - 14, L.yTower - 8, 0);
+  sun.position.set(c.x - 30, c.y - 40, 90); sun.target.position.set(c.x, c.y, 0);
+  Object.assign(flows[0].box, { cx: c.x, cy: c.y, cz: c.z }); Object.assign(flows[1].box, { cx: c.x, cy: L.yTower });
+  flows.forEach((fl) => fl.seed());
+  routeReady = true; setCam(cam);
+}).catch(() => {});
+
+// ---------- frames ----------
+let frames = [], synced = false;
+const latest = () => frames[frames.length - 1];
+function onFrame(f) {
+  f.arrived = performance.now();
+  if (frames.length && f.t < latest().t) { frames = []; hist.length = 0; for (const d of DRONES) trails[d.key].length = 0; }
+  frames.push(f); if (frames.length > 6) frames.shift();
+  field = f.field; $("wait").hidden = true;
+  // adopt the server's conditions (another tab, or the flight engineer) unless the presenter just changed them
+  if (!synced || performance.now() - lastLocal > 1500) {
+    const [mx, my] = f.controls.mean, sp = Math.round(10 * Math.hypot(mx, my)) / 10, dir = sp > 0.2 ? Math.round(Math.atan2(my, mx) * 180 / Math.PI) : ctl.dir;
+    if (sp !== ctl.speed || dir !== ctl.dir || f.controls.learning !== ctl.learning) { Object.assign(ctl, { speed: sp, dir, learning: f.controls.learning }); sync(); }
+    synced = true;
+  }
+  for (const d of DRONES) {
+    const r = f.models[d.key], tr = trails[d.key];
+    if (r.crashed) tr.length = 0; else { tr.push(r.pos); if (tr.length > 240) tr.shift(); }
+    if (routeReady && !r.crashed) worst[d.key] = Math.min(worst[d.key], nearest(r.pos).d);
+  }
+  if (routeReady && (!hist.length || f.t - hist[hist.length - 1].t >= 0.1)) {
+    const s = { t: f.t }; for (const d of DRONES) { const r = f.models[d.key]; s[d.key] = r.crashed ? NaN : Math.hypot(...r.pos.map((p, i) => p - f.ref[i])); }
+    hist.push(s); while (hist.length && hist[0].t < f.t - HIST_S) hist.shift();
+  }
+}
+
+// ---------- tracking-error chart, log scale so 4 vs 7 cm and 14 vs 32 cm both read ----------
+const hist = [], HIST_S = 40, LO = 0.5, HI = 100; // cm
+const rms = (key, secs) => { const t0 = hist.length ? hist[hist.length - 1].t - secs : 0, v = hist.filter((s) => s.t >= t0 && Number.isFinite(s[key])).map((s) => s[key] ** 2); return v.length ? Math.sqrt(v.reduce((a, b) => a + b) / v.length) : NaN; };
+function drawChart() {
+  const c = $("chart"), r = c.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+  if (!r.width) return;
+  if (c.width !== Math.round(r.width * dpr) || c.height !== Math.round(r.height * dpr)) { c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = r.width, H = r.height, L0 = 44, R0 = 8, T0 = 6, B0 = 6, pw = W - L0 - R0, ph = H - T0 - B0;
+  const y = (cm) => T0 + ph * (1 - (Math.log10(Math.min(Math.max(cm, LO), HI)) - Math.log10(LO)) / Math.log10(HI / LO));
+  g.clearRect(0, 0, W, H);
+  g.font = '500 11px "IBM Plex Mono", monospace'; g.textBaseline = "middle"; g.textAlign = "right"; g.lineWidth = 1;
+  for (const v of [1, 3, 10, 30, 100]) {
+    g.strokeStyle = css("--line"); g.beginPath(); g.moveTo(L0, y(v) + 0.5); g.lineTo(W - R0, y(v) + 0.5); g.stroke();
+    g.fillStyle = css("--muted"); g.fillText(`${v} cm`, L0 - 4, y(v));
+  }
+  if (hist.length < 2) return;
+  const tN = hist[hist.length - 1].t, x = (t) => L0 + pw * (1 - (tN - t) / HIST_S);
+  for (const d of DRONES) {
+    g.strokeStyle = css(d.color); g.lineWidth = d.ghost ? 1.6 : 2.2; g.lineJoin = "round"; g.beginPath();
+    let pen = false;
+    for (const s of hist) { const v = 100 * s[d.key]; if (!Number.isFinite(v)) { pen = false; continue; } pen ? g.lineTo(x(s.t), y(v)) : g.moveTo(x(s.t), y(v)); pen = true; }
+    g.stroke();
+    const v = 100 * hist[hist.length - 1][d.key];
+    if (Number.isFinite(v)) { g.fillStyle = css(d.color); g.beginPath(); g.arc(x(tN), y(v), 3.5, 0, 7); g.fill(); }
+  }
+}
+const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
+function current() {
+  if (frames.length < 2) return null;
+  const a = frames[frames.length - 2], b = latest(), s = Math.min(1, (performance.now() - b.arrived) / 20);
+  const Lp = (u, v) => u.map((x, i) => x + (v[i] - x) * s), out = { t: a.t + (b.t - a.t) * s, ref: Lp(a.ref, b.ref), models: {} };
+  for (const d of DRONES) {
+    const A = a.models[d.key], B = b.models[d.key];
+    qa.set(A.q[1], A.q[2], A.q[3], A.q[0]); qb.set(B.q[1], B.q[2], B.q[3], B.q[0]);
+    out.models[d.key] = { pos: Lp(A.pos, B.pos), q: qa.clone().slerp(qb, s), motors: Lp(A.motors, B.motors), F: Lp(A.F, B.F), F_hat: Lp(A.F_hat, B.F_hat), crashed: B.crashed };
+  }
+  return out;
+}
+
+// ---------- cameras ----------
+let cam = "follow";
+const wp = V(0, 0, 0), lastFollow = V(0, 0, 0), tmpV = V(0, 0, 0);
+// from above and outside the pass, looking down across it at the conductors: drift toward the line
+// shows as a gap on screen instead of motion along the line of sight
+function followPoint(out) { drones.ph.g.getWorldPosition(out); out.y += 0.9; return out; }
+function setCam(c) {
+  cam = c; $("cam-follow").setAttribute("aria-pressed", String(c === "follow")); $("cam-over").setAttribute("aria-pressed", String(c === "over"));
+  if (c === "over") { camera.position.set(flows[0].box.cx - 26, flows[0].box.cy - 30, flows[0].box.cz + 6); controls.target.set(flows[0].box.cx, L.yTower - 2, flows[0].box.cz - 2); }
+  else { followPoint(lastFollow); controls.target.copy(lastFollow); camera.position.copy(lastFollow).add(tmpV.set(-0.5, -1.7, 2.5)); }
+  controls.update();
+}
+$("cam-follow").onclick = () => setCam("follow");
+$("cam-over").onclick = () => setCam("over");
+
+// ---------- draw ----------
+const w3 = [0, 0, 0];
+function draw(dt) {
+  const f = current(); if (!f || !field || !routeReady) return;
+  const fmax = latest().f_max;
+  let closest = Infinity;
+  for (const d of DRONES) {
+    const D = drones[d.key], m = f.models[d.key];
+    D.g.position.set(m.pos[0], m.pos[1], m.pos[2]); D.g.quaternion.copy(m.q);
+    D.props.forEach((p, i) => {
+      const w = 260 * Math.sqrt(Math.max(0, m.motors[i] / fmax)); // drawn slower than real so the eye can follow
+      p.hub.rotation.z += p.dir * w * dt; p.hub.visible = w < 120; p.disc.material.opacity = Math.min(1, w / 120) * (d.ghost ? 0.5 : 1);
+    });
+    const arr = D.trail.geometry.attributes.position.array, tr = trails[d.key];
+    tr.forEach((p, i) => { arr[3 * i] = p[0]; arr[3 * i + 1] = p[1]; arr[3 * i + 2] = p[2]; });
+    D.trail.geometry.setDrawRange(0, tr.length); D.trail.geometry.attributes.position.needsUpdate = true;
+    const o = D.g.position, up = new THREE.Vector3(0, 0, 1).applyQuaternion(m.q), T = m.motors.reduce((a, b) => a + b, 0);
+    D.fTrue.set(o, m.F); D.fHat.set(o, d.ghost ? [0, 0, 0] : m.F_hat); D.fThrust.set(o, d.key === "ph" ? [up.x * T, up.y * T, up.z * T] : [0, 0, 0]);
+    const n = nearest(m.pos); closest = Math.min(closest, n.d);
+    D.reach.geometry.setFromPoints([V(...m.pos), V(n.x, n.y, n.z)]); D.reach.computeLineDistances();
+    D.reach.material.color.set(n.d < BUFFER ? css("--bad") : css(d.color));
+  }
+  for (const b of buffers) b.material.opacity = closest < BUFFER ? 0.16 : 0.045;
+  // windsock
+  windAt(sock.position.x, sock.position.y, 6, f.t, w3);
+  const sp = Math.hypot(w3[0], w3[1]);
+  if (sp > 0.2) { const dy = Math.atan2(w3[1], w3[0]) - sockYaw; sockYaw += Math.atan2(Math.sin(dy), Math.cos(dy)) * Math.min(1, dt * 3); }
+  sockDroop += ((1 - Math.min(sp / 7, 1)) * 1.25 - sockDroop) * Math.min(1, dt * 2.5);
+  pivot.rotation.set(0, 0, 0); pivot.rotateZ(sockYaw); pivot.rotateY(sockDroop + Math.sin(performance.now() / 160) * 0.04 * Math.min(sp, 4));
+  // air: advance both layers; hide them in calm air
+  const moving = Math.hypot(field.mean[0], field.mean[1]) > 0.2 || field.bursts.length > 0;
+  for (const fl of flows) { fl.mesh.visible = moving; if (moving) fl.step(f.t, dt); }
+  // clouds ride the wind at their own height, wrapping round the valley
+  for (const cl of clouds) {
+    windAt(cl.position.x, cl.position.y, cl.position.z, f.t, w3); cl.position.x += w3[0] * dt; cl.position.y += w3[1] * dt;
+    const c0 = flows[1].box; if (Math.abs(cl.position.x - c0.cx) > 520) cl.position.x -= Math.sign(cl.position.x - c0.cx) * 1040; if (Math.abs(cl.position.y - c0.cy) > 520) cl.position.y -= Math.sign(cl.position.y - c0.cy) * 1040;
+  }
+  swayTrees(f.t);
+  if (cam === "follow") { followPoint(wp); camera.position.add(tmpV.subVectors(wp, lastFollow)); controls.target.copy(wp); lastFollow.copy(wp); }
+  const rect = canvas.getBoundingClientRect();
+  for (const d of DRONES) {
+    const D = drones[d.key], m = f.models[d.key], c = nearest(m.pos).d;
+    D.g.getWorldPosition(tmpV); tmpV.project(camera);
+    D.tag.hidden = !(tmpV.z < 1 && Math.abs(tmpV.x) < 1.05 && Math.abs(tmpV.y) < 1.05);
+    D.tag.style.left = `${(tmpV.x + 1) / 2 * rect.width}px`; D.tag.style.top = `${(1 - tmpV.y) / 2 * rect.height}px`;
+    D.tag.classList.toggle("danger", c < BUFFER);
+    D.ring.hidden = D.tag.hidden || m.crashed; D.ring.style.left = D.tag.style.left; D.ring.style.top = D.tag.style.top; D.ring.classList.toggle("danger", c < BUFFER);
+    D.tag.textContent = m.crashed ? `${d.label} · crashed, recovering` : `${d.label} · ${c.toFixed(2)} m`;
+  }
+}
+
+function readouts() {
+  const f = latest(); if (!f || !routeReady) return;
+  const w = f.models.ph.wind, sp = Math.hypot(w[0], w[1]);
+  const m10 = f.field.mean, u10 = Math.hypot(m10[0], m10[1]);
+  $("w-speed").textContent = `Wind ${sp.toFixed(1)} m/s at the drone`;
+  $("w-note").textContent = f.field.bursts.length ? "gust passing through" : u10 < 0.2 ? "calm" : `from the ${compass(Math.atan2(m10[1], m10[0]) * 180 / Math.PI)}${m10[1] / u10 > 0.5 ? " → toward the line" : ""}`;
+  for (const d of DRONES) {
+    const m = f.models[d.key], c = nearest(m.pos).d, e = rms(d.key, 5);
+    $(`err-${d.key}`).textContent = m.crashed ? "crash" : Number.isFinite(e) ? (100 * e).toFixed(1) : "–";
+    $(`clr-${d.key}`).textContent = `${c.toFixed(2)} m`;
+    const wv = worst[d.key], wb = $(`min-${d.key}`); wb.textContent = wv === Infinity ? "–" : `${wv.toFixed(2)} m`; wb.className = wv < BUFFER ? "bad" : "";
+    const [cls, txt] = c < BUFFER ? ["bad", "inside safety buffer"] : c < BUFFER + 0.1 ? ["warn", "near the buffer"] : ["ok", "safe"];
+    const chip = $(`chip-${d.key}`); chip.className = `chip ${cls}`; chip.textContent = txt;
+    $(`card-${d.key}`).classList.toggle("danger", c < BUFFER);
+  }
+}
+
+// ---------- flight engineer: waits for credentials, then drives this demo with the same controls ----------
+let engReady = false, engBusy = false;
+const ENG_HINT = "Ask a question, or press Clear for flight to run the full mission (type a brief to change it)";
+async function engStatus() {
+  try {
+    const s = await (await fetch("/agent")).json();
+    engReady = s.ready; $("eng-model").textContent = s.model;
+    $("eng-state").className = `chip ${s.ready ? "ok" : "warn"}`; $("eng-state").textContent = s.ready ? "ready" : "waiting for credentials";
+    $("eng-q").placeholder = s.ready ? ENG_HINT : `Offline: ${s.how}`;
+  } catch { engReady = false; }
+  $("eng-q").disabled = $("eng-go").disabled = $("mis-go").disabled = !engReady || engBusy;
+  if (!engReady) setTimeout(engStatus, 5000);
+}
+function engLine(cls, text) { const d = document.createElement("div"); d.className = cls; d.textContent = text; $("eng-log").append(d); $("eng-log").scrollTop = 1e9; return d; }
+
+// ---------- mission view: phases, envelope chart, checked report ----------
+const STEPS = ["Identify", "Predict", "Expand", "Reconcile", "Report", "Show live"];
+const COLORS = { none: "--none", mlp: "--nn", ph: "--ph" }, NAMES = { none: "No model", mlp: "Neural net", ph: "Learner" };
+let runs = [], step = -1;
+function setStep(i) {
+  if (i < step) return; step = i;
+  $("steps").innerHTML = STEPS.map((n, k) => `<span class="${k < step ? "done" : k === step ? "on" : ""}">${k + 1} ${n}</span>`).join("");
+}
+function phaseOf(ev) {
+  if (ev.type === "code") return 1;
+  if (ev.type === "tool" && ev.name.startsWith("live_")) return 5;
+  if (ev.type === "tool" && ev.name === "submit_report") return 4;
+  if (ev.type === "tool" && ev.name === "fly") return ev.input.traj === "hover" && !ev.input.gust ? 0 : ev.input.lr > 0.1 ? 3 : 2;
+  return -1;
+}
+function drawEnv() {
+  const c = $("env"), r = c.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  c.width = r.width * dpr; c.height = r.height * dpr;
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height);
+  const css = getComputedStyle(document.documentElement), col = (m) => css.getPropertyValue(COLORS[m]).trim();
+  const pts = runs.filter((x) => !(x.params.traj === "hover" && !x.params.gust));
+  const L = 34, B = 22, W = r.width - L - 8, H = r.height - B - 8, xmax = 8, ymax = 30;
+  const X = (w) => L + (w / xmax) * W, Y = (cm) => 8 + H - (Math.min(cm, ymax) / ymax) * H;
+  g.strokeStyle = css.getPropertyValue("--line"); g.fillStyle = css.getPropertyValue("--muted"); g.font = "11px IBM Plex Mono, monospace"; g.lineWidth = 1;
+  for (let w = 0; w <= xmax; w += 2) { g.beginPath(); g.moveTo(X(w), 8); g.lineTo(X(w), 8 + H); g.stroke(); g.fillText(`${w}`, X(w) - 3, r.height - 6); }
+  for (let cm = 0; cm <= ymax; cm += 10) { g.beginPath(); g.moveTo(L, Y(cm)); g.lineTo(L + W, Y(cm)); g.stroke(); g.fillText(`${cm}`, 6, Y(cm) + 4); }
+  g.fillText("m/s", L + W - 22, 8 + H - 4); g.fillText("cm", L + 4, 18);
+  for (const m of ["none", "mlp", "ph"]) {
+    const mine = pts.filter((x) => x.params.model === m && x.params.lr <= 0.1).map((x) => [Math.hypot(...x.params.wind), x.metrics]).sort((a, b) => a[0] - b[0]);
+    g.strokeStyle = g.fillStyle = col(m); g.lineWidth = 2; g.beginPath();
+    mine.filter(([, k]) => !k.crash_rate).forEach(([w, k], i) => i ? g.lineTo(X(w), Y(100 * k.rmse_m)) : g.moveTo(X(w), Y(100 * k.rmse_m))); g.stroke();
+    for (const x of pts.filter((p) => p.params.model === m)) {
+      const w = Math.hypot(...x.params.wind), k = x.metrics, px = X(w), py = Y(100 * k.rmse_m);
+      const cy = 18 + 12 * ["none", "mlp", "ph"].indexOf(m);  // one row per controller so crashes at one wind never overlap
+      if (k.crash_rate) { g.lineWidth = 2.5; g.beginPath(); g.moveTo(px - 5, cy - 5); g.lineTo(px + 5, cy + 5); g.moveTo(px + 5, cy - 5); g.lineTo(px - 5, cy + 5); g.stroke(); }
+      else { g.beginPath(); g.arc(px, py, 4, 0, 7); x.params.lr > 0.1 ? (g.lineWidth = 1.5, g.stroke()) : g.fill(); }
+    }
+  }
+}
+function md(text) {
+  const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[(r[0-9a-f]{6}|facts)\.(\w+)\]/g, (_, s, k) => `<span class="cite" title="${s === "facts" ? "vehicle fact" : `run ${s}`}: ${k}, checked against the log">${s === "facts" ? "fact" : s}</span>`)
+    .replace(/\[pred\]/g, '<span class="cite pred" title="the engineer\'s prediction, not a measurement">pred</span>');
+  let out = "", rows = [];
+  const flush = () => { if (rows.length) out += "<table>" + rows.filter((r) => !/^\s*\|?\s*:?-{2,}/.test(r)).map((r, i) => "<tr>" + r.replace(/^\s*\||\|\s*$/g, "").split("|").map((c) => i ? `<td>${inline(c.trim())}</td>` : `<th>${inline(c.trim())}</th>`).join("") + "</tr>").join("") + "</table>"; rows = []; };
+  for (const line of text.split("\n")) {
+    if (/^\s*\|/.test(line)) { rows.push(line); continue; } flush();
+    const h = line.match(/^(#{1,4})\s+(.*)/);
+    if (h) out += `<h3>${inline(h[2])}</h3>`; else if (/^\s*[-*]\s+/.test(line)) out += `<div>• ${inline(line.replace(/^\s*[-*]\s+/, ""))}</div>`; else if (line.trim()) out += `<p style="margin:4px 0">${inline(line)}</p>`;
+  }
+  flush(); return out;
+}
+function onEvent(ev) {
+  const p = phaseOf(ev); if (p >= 0) setStep(p);
+  if (ev.type === "tool") engLine("tool", `→ ${ev.name}(${Object.entries(ev.input).map(([k, v]) => `${k}=${k === "report" ? "…" : v}`).join(", ")})`);
+  else if (ev.type === "code") engLine("code", `$ ${ev.input.code || ev.input.command || JSON.stringify(ev.input)}`);
+  else if (ev.type === "code_result") engLine("code", ev.stdout || ev.stderr || ev.error || "");
+  else if (ev.type === "note") { if (ev.text.trim()) engLine("note", ev.text.trim()); }
+  else if (ev.type === "run") {
+    runs.push(ev); drawEnv(); const k = ev.metrics, q = ev.params;
+    engLine("run", `  ${ev.id} · ${NAMES[q.model]} · ${q.traj} · ${Math.hypot(...q.wind).toFixed(1)} m/s · rms ${(100 * k.rmse_m).toFixed(1)} cm · max ${(100 * k.max_err_m).toFixed(1)} cm${k.crash_rate ? ` · CRASH ${(100 * k.crash_rate).toFixed(0)}%` : ""}`);
+  } else if (ev.type === "rejected") engLine("rej", "✗ checker rejected the report:\n  " + ev.problems.join("\n  "));
+  else if (ev.type === "report") {
+    setStep(5); engLine("run", `✓ report accepted, every number checked against the run log (${ev.claims.length} claims)`);
+    $("report").hidden = false; $("report").innerHTML = `<span class="stamp">✓ ${ev.claims.length} claims verified against the run log</span>` + md(ev.markdown);
+  } else if ((ev.type === "text" || ev.type === "error") && ev.text.trim()) engLine(ev.type === "text" ? "note" : "err", ev.text.trim());
+}
+async function engRun(path, body, title, isMission) {
+  if (engBusy) return;
+  stopDemo(); engBusy = true; $("eng-go").disabled = $("mis-go").disabled = true;
+  $("mission").hidden = false; $("eng-log").textContent = ""; $("report").hidden = true; runs = []; step = -1;
+  $("steps").hidden = !isMission; $("env").parentElement.hidden = !isMission; if (isMission) { setStep(0); drawEnv(); }
+  engLine("q", title);
+  try {
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({})); engLine("err", j.error || `offline: ${j.how || r.status}`);
+      if (r.status === 503) { engReady = false; engStatus(); }
+    } else {
+      const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+      for (;;) {
+        const { value, done } = await rd.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        for (let i; (i = buf.indexOf("\n")) >= 0; buf = buf.slice(i + 1)) onEvent(JSON.parse(buf.slice(0, i)));
+      }
+    }
+  } catch { engLine("err", "lost connection to the demo server"); }
+  if (isMission && !$("report").hidden) setStep(STEPS.length);
+  engBusy = false; $("eng-q").disabled = $("eng-go").disabled = $("mis-go").disabled = !engReady;
+}
+$("eng-form").onsubmit = (e) => { e.preventDefault(); const q = $("eng-q").value.trim(); if (q) engRun("/ask", { q }, q, false); };
+$("mis-go").onclick = () => { const b = $("eng-q").value.trim(); engRun("/mission", { brief: b }, b || "Mission: clear the drone for tomorrow's line inspection, 3 to 5 m/s toward the line, gusty.", true); };
+engStatus();
+
+function resize() { const r = canvas.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe($("view"));
+let last = 0, lastUi = 0, started = false;
+function loop(now) {
+  const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now;
+  draw(dt);
+  if (!started && routeReady && frames.length >= 2) { setCam("follow"); started = true; }
+  controls.update();
+  renderer.render(scene, camera);
+  drawChart();
+  if (now - lastUi > 150) { readouts(); lastUi = now; }
+  requestAnimationFrame(loop);
+}
+function connect() {
+  const es = new EventSource("/stream");
+  es.onopen = () => { $("dot").classList.add("on"); $("conn").textContent = "live simulation"; };
+  es.onmessage = (e) => onFrame(JSON.parse(e.data));
+  es.onerror = () => { $("dot").classList.remove("on"); $("conn").textContent = "reconnecting"; synced = false; };
+}
+camera.position.set(-20, -30, 26); controls.target.set(0, 0, 18);
+sync(); resize(); connect(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

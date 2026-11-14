@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Falcon Street Canyon</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
+<script src="/field.js"></script>
+<script src="/quad.js"></script>
+<style>
+/* Layout: one daylight 3D street canyon, two numbers, a few controls. */
+:root {
+  --bg: #f2f3f5; --card: #ffffff; --ink: #121a22; --muted: #5d6b78; --line: #dde1e6;
+  --none: #6f7b87; --ph: #1f5fd1; --bad: #c8372d; --warn: #c27a00; --good: #1e8a55; --jet: #0b84c6;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { margin: 0 }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.45 }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 14px 22px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 12px }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px }
+h1 { font-size: clamp(22px, 2.8vw, 32px); line-height: 1.1; margin: 0; font-weight: 600 }
+.sub { margin: 0; color: var(--muted) }
+.conn { font: 500 13px var(--mono); color: var(--muted); display: flex; gap: 8px; align-items: center }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad) }
+.dot.on { background: var(--good) }
+.view { position: relative; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; height: min(64vh, 680px); min-height: 400px;
+  background: linear-gradient(#78a9d6 0%, #b3cfe6 55%, #dfe6ec 100%) }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none }
+.ov { position: absolute; pointer-events: none }
+.wind { left: 12px; top: 12px; font-weight: 600; font-size: 22px; font-variant-numeric: tabular-nums; color: var(--ink); background: rgba(255,255,255,.88); border-radius: 10px; padding: 6px 12px }
+.wind small { display: block; font: 500 13px var(--mono); color: #1f2a35 }
+.wind .jet { color: var(--jet) }
+.cams { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: rgba(255,255,255,.92) }
+.seg button { font: 500 14px var(--body); color: var(--muted); background: none; border: 0; padding: 7px 12px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #fff }
+.note { left: 16px; bottom: 10px; font: 500 12px var(--mono); color: #1f2a35; background: rgba(255,255,255,.82); padding: 3px 8px; border-radius: 6px }
+.tag { position: absolute; transform: translate(-50%, -175%); font: 600 13px var(--body); padding: 3px 9px; border-radius: 7px; background: rgba(255,255,255,.94); border: 1.5px solid currentColor; white-space: nowrap; font-variant-numeric: tabular-nums }
+.tag.ghost { transform: translate(-50%, -300%) }
+.tag.danger { color: var(--bad) !important; background: #fff1f0 }
+.wait { inset: 0; display: grid; place-items: center; color: var(--muted); font: 500 15px var(--mono); background: rgba(242,243,245,.85) }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 18px; display: grid; gap: 2px }
+.card.danger { border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad) }
+.who { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600 }
+.who span { display: flex; align-items: center; gap: 10px }
+.sw { width: 14px; height: 14px; border-radius: 50%; flex: none }
+.chip { font: 500 12px var(--mono); padding: 1px 9px; border-radius: 99px; border: 1px solid currentColor }
+.chip.ok { color: var(--good) } .chip.warn { color: var(--warn) } .chip.bad { color: var(--bad) }
+.num { font-size: clamp(34px, 4.6vw, 50px); font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums }
+.num small { font-size: 16px; font-weight: 500; color: var(--muted); margin-left: 6px }
+.meta { font: 500 13px var(--mono); color: var(--muted) }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 16px }
+.ctl { display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0 }
+.ctl label { font-weight: 500; white-space: nowrap }
+.ctl input { flex: 1; min-width: 0; accent-color: var(--ph) }
+.ctl output { font: 500 15px var(--mono); min-width: 6ch; text-align: right }
+button.act { font: 600 16px var(--body); border-radius: 10px; padding: 10px 18px; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink) }
+#gust { background: var(--ph); color: #fff; border-color: var(--ph) }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ph); outline-offset: 2px }
+@media (max-width: 640px) { .cards { grid-template-columns: 1fr } .note { display: none } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Inspecting a building in a windy street</h1>
+      <p class="sub">The same simulated drone flies the same facade pass twice. Buildings shelter the wind, then it jets through every cross street. The solid drone learns it; the ghost does not.</p>
+    </div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="conn">connecting</span></div>
+  </header>
+
+  <div class="view" id="view">
+    <canvas id="gl" aria-label="3D street canyon with a quadcopter inspecting a facade in wind"></canvas>
+    <div class="ov wind"><span id="w-speed">Wind 0.0 m/s</span><small id="w-note">calm</small><small id="w-drone">&nbsp;</small></div>
+    <div class="cams"><div class="seg" role="group" aria-label="Camera"><button id="cam-follow" aria-pressed="true">Follow</button><button id="cam-over" aria-pressed="false">Overview</button></div></div>
+    <div class="ov" id="tags" style="inset:0"></div>
+    <div class="ov note">stylised street-canyon wind: sheltered mid-block, channelled along the street, jetting through gaps · drones 3× real size</div>
+    <div class="ov wait" id="wait">waiting for the simulator · uv run python scripts/live.py --scene city</div>
+  </div>
+
+  <div class="cards">
+    <div class="card" id="card-none"><div class="who"><span><span class="sw" style="background:var(--none)"></span>Ghost · no wind model</span><span class="chip" id="chip-none"></span></div>
+      <div class="num"><span id="clr-none">–</span><small>m from the building</small></div><div class="meta" id="meta-none">&nbsp;</div></div>
+    <div class="card" id="card-ph"><div class="who"><span><span class="sw" style="background:var(--ph)"></span>Solid · learns the wind</span><span class="chip" id="chip-ph"></span></div>
+      <div class="num"><span id="clr-ph">–</span><small>m from the building</small></div><div class="meta" id="meta-ph">&nbsp;</div></div>
+  </div>
+
+  <div class="controls">
+    <div class="ctl"><label for="speed">Wind</label><input id="speed" type="range" min="0" max="6" step="0.5" value="0"><output id="speed-o">0.0 m/s</output></div>
+    <div class="ctl"><label for="dir">From</label><input id="dir" type="range" min="-180" max="180" step="15" value="90"><output id="dir-o">south</output></div>
+    <button class="act" id="gust">Gust</button>
+    <button class="act" id="reset">Reset</button>
+  </div>
+</div>
+
+<script>
+const DRONES = [{ key: "none", color: "--none", label: "Ghost", ghost: true }, { key: "ph", color: "--ph", label: "Learns the wind", ghost: false }];
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const rad = (d) => d * Math.PI / 180;
+const S = 3, KEEP = 1.2; // drawn drone scale; keep-out distance from facades, m
+const STREET = { wall: 4, road: 2.6, gapHalf: 2 }; // walls at y = +-4 m; cross streets 4 m wide at the site's gap centres
+
+// ---------- controls ----------
+const ctl = { speed: 0, dir: 90 };
+let sendTimer = null;
+const post = (b) => fetch("/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).catch(() => {});
+function sync() { $("speed").value = ctl.speed; $("speed-o").textContent = `${ctl.speed.toFixed(1)} m/s`; $("dir").value = ctl.dir; $("dir-o").textContent = compass(ctl.dir); }
+function send() { clearTimeout(sendTimer); sendTimer = setTimeout(() => post({ mean: [ctl.speed * Math.cos(rad(ctl.dir)), ctl.speed * Math.sin(rad(ctl.dir))], gust: ctl.speed > 0 ? 1.0 : 0, learning: "gentle" }), 30); }
+$("speed").oninput = (e) => { ctl.speed = +e.target.value; sync(); send(); };
+$("dir").oninput = (e) => { ctl.dir = +e.target.value; sync(); send(); };
+// 2 m/s: the gap jets multiply it, so a larger burst exceeds the drone's thrust.
+$("gust").onclick = () => { const d = rad(ctl.dir); post({ burst: { speed: 2, dir: [Math.cos(d), Math.sin(d)] } }); };
+$("reset").onclick = () => { post({ reset: true }); for (const d of DRONES) trails[d.key].length = 0; };
+addEventListener("keydown", (e) => { if (e.key === " " && e.target.tagName !== "INPUT") { e.preventDefault(); $("gust").click(); } });
+
+// ---------- wind field: same formula as field() and site_gain() in falcon/live.py ----------
+let field = null;
+const windAt = (x, y, z, t, out) => falconWind(field, x, y, z, t, out);
+
+// ---------- scene: z up like the simulator ----------
+const canvas = $("gl"), renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xcdd9e3, 40, 140);
+const camera = new THREE.PerspectiveCamera(48, 16 / 9, 0.05, 500); camera.up.set(0, 0, 1);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 0.3; controls.maxDistance = 80;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+scene.add(new THREE.HemisphereLight(0xdbe9ff, 0x6b6660, 0.85));
+const sun = new THREE.DirectionalLight(0xfff0d8, 1.6);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 120 });
+sun.position.set(-18, -26, 48); scene.add(sun, sun.target);
+
+const speckle = (g, w, h, base, n, f) => { g.fillStyle = base; g.fillRect(0, 0, w, h); for (let i = 0; i < n; i++) { g.fillStyle = f(); g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } };
+const asphalt = tex(512, 512, (g, w, h) => speckle(g, w, h, "#4b4f54", 22000, () => { const v = 60 + Math.random() * 40 | 0; return `rgba(${v},${v},${v + 4},.5)`; }), [40, 40]);
+const paving = tex(256, 256, (g, w, h) => { speckle(g, w, h, "#b9b5ad", 6000, () => `rgba(150,146,138,.5)`); g.strokeStyle = "rgba(120,116,110,.7)"; g.lineWidth = 2; for (let k = 0; k <= 256; k += 64) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, 256); g.stroke(); g.beginPath(); g.moveTo(0, k); g.lineTo(256, k); g.stroke(); } });
+
+// facade textures: floors 3.2 m, bays 1.6 m; a few styles with some lit windows
+const FACADES = [["#c9c2b6", "#4d6276"], ["#9b5a43", "#3c4c5a"], ["#d8d9d6", "#2f4a63"], ["#7a8590", "#a8c3d8"], ["#b7a58c", "#38485a"]].map(([wall, glass], i) =>
+  tex(256, 256, (g, w, h) => {
+    g.fillStyle = wall; g.fillRect(0, 0, w, h);
+    for (let fy = 0; fy < 4; fy++) for (let fx = 0; fx < 4; fx++) {
+      const x = fx * 64 + 12, y = fy * 64 + 14, lit = Math.random() < 0.18;
+      g.fillStyle = lit ? "#f6d58f" : glass; g.fillRect(x, y, i === 3 ? 52 : 40, i === 3 ? 44 : 38);
+      g.fillStyle = "rgba(255,255,255,.18)"; g.fillRect(x, y, i === 3 ? 52 : 40, 4);
+    }
+  }));
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ map: asphalt, roughness: 0.95 }));
+ground.receiveShadow = true; scene.add(ground);
+const buildings = []; // {x0, x1, y0, y1, h} footprints, for clearance and for keeping streaks out
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+function building(x0, x1, y0, y1, h, style) {
+  const t = FACADES[style].clone(); t.needsUpdate = true; t.repeat.set((x1 - x0) / 6.4, h / 12.8);
+  const side = FACADES[style].clone(); side.needsUpdate = true; side.repeat.set((y1 - y0) / 6.4, h / 12.8);
+  const roof = new THREE.MeshStandardMaterial({ color: 0x55595e, roughness: 0.9 });
+  const faceX = new THREE.MeshStandardMaterial({ map: side, roughness: 0.75 }), faceY = new THREE.MeshStandardMaterial({ map: t, roughness: 0.75 });
+  const m = new THREE.Mesh(boxGeo, [faceX, faceX, faceY, faceY, roof, roof]);
+  m.scale.set(x1 - x0, y1 - y0, h); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, h / 2); m.castShadow = m.receiveShadow = true; scene.add(m);
+  for (let k = 0; k < 2; k++) { const u = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color: 0x9aa1a7, roughness: 0.6 })); u.scale.set(1.6, 1.2, 1); u.position.set(x0 + 1.5 + Math.random() * (x1 - x0 - 3), y0 + 1.5 + Math.random() * (y1 - y0 - 3), h + 0.5); u.castShadow = true; scene.add(u); }
+  buildings.push({ x0, x1, y0, y1, h });
+}
+function lamp(x, y, facing) {
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 6, 8), new THREE.MeshStandardMaterial({ color: 0x3a3f44, metalness: 0.6, roughness: 0.5 }));
+  pole.rotation.x = Math.PI / 2; pole.position.set(x, y, 3); pole.castShadow = true; scene.add(pole);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.4, 0.08), pole.material); arm.position.set(x, y + facing * 0.7, 6); scene.add(arm);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.25, 0.12), new THREE.MeshStandardMaterial({ color: 0xfff4d6, emissive: 0xfff0c8, emissiveIntensity: 0.6 })); head.position.set(x, y + facing * 1.35, 5.95); scene.add(head);
+}
+function car(x, y, color, yaw) {
+  const g = new THREE.Group(); g.position.set(x, y, 0); g.rotation.z = yaw;
+  const body = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.35 })); body.scale.set(4.2, 1.8, 0.75); body.position.z = 0.6; body.castShadow = true; g.add(body);
+  const cab = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color: 0x23303a, metalness: 0.6, roughness: 0.2 })); cab.scale.set(2.2, 1.6, 0.6); cab.position.set(-0.2, 0, 1.25); cab.castShadow = true; g.add(cab);
+  for (const [dx, dy] of [[1.3, 0.9], [-1.3, 0.9], [1.3, -0.9], [-1.3, -0.9]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.22, 14), new THREE.MeshStandardMaterial({ color: 0x15181b })); w.position.set(dx, dy, 0.34); g.add(w); }
+  scene.add(g);
+}
+function stripe(x, y, w, h) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: 0xf1f1ec })); m.position.set(x, y, 0.012); scene.add(m); }
+
+function buildCity(site) {
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const gaps = site.gaps, half = STREET.gapHalf, L = 60;
+  const blocks = []; let x = -L; for (const g of [...gaps].sort((a, b) => a - b)) { blocks.push([x, g - half]); x = g + half; } blocks.push([x, L]);
+  for (const side of [1, -1]) for (const [a, b] of blocks) {
+    let x0 = a;
+    while (x0 < b - 0.5) {
+      const w = Math.min(b - x0, 5 + rnd() * 5), y0 = side > 0 ? STREET.wall : -STREET.wall - (12 + rnd() * 8), y1 = side > 0 ? STREET.wall + 12 + rnd() * 8 : -STREET.wall;
+      building(x0, x0 + w, Math.min(y0, y1), Math.max(y0, y1), Math.max(site.roof, 18 + rnd() * 24), Math.floor(rnd() * FACADES.length));
+      x0 += w;
+    }
+  }
+  // a second row behind, to fill the skyline
+  for (const side of [1, -1]) for (let bx = -L; bx < L; bx += 9) building(bx, bx + 8, side > 0 ? 30 : -42, side > 0 ? 42 : -30, 20 + rnd() * 40, Math.floor(rnd() * FACADES.length));
+  // pavements, kerbs, lane markings, crossings, lamps, parked cars
+  for (const side of [1, -1]) {
+    const pave = new THREE.Mesh(new THREE.BoxGeometry(2 * L, STREET.wall - STREET.road, 0.15), new THREE.MeshStandardMaterial({ map: paving.clone(), roughness: 0.9 }));
+    pave.material.map.needsUpdate = true; pave.material.map.repeat.set(2 * L / 2, (STREET.wall - STREET.road) / 2);
+    pave.position.set(0, side * (STREET.road + STREET.wall) / 2, 0.075); pave.receiveShadow = true; scene.add(pave);
+    for (let lx = -L + 4; lx < L; lx += 12) if (gaps.every((g) => Math.abs(lx - g) > 3)) lamp(lx, side * (STREET.road + 0.4), -side);
+  }
+  for (let sx = -L; sx < L; sx += 4) if (gaps.every((g) => Math.abs(sx - g) > 3)) stripe(sx, 0, 2, 0.15);
+  for (const g of gaps) for (let k = -2; k <= 2; k++) stripe(g + k * 0.8, 0, 0.45, 2 * STREET.road - 0.6);
+  const colours = [0xb3262e, 0x2f5f8f, 0xe5e5e0, 0x222a30, 0x6b7a4f];
+  for (let i = 0; i < 9; i++) { const cx = -L + 6 + rnd() * (2 * L - 12); if (gaps.every((g) => Math.abs(cx - g) > 4)) car(cx, (rnd() < 0.5 ? 1 : -1) * (STREET.road - 1.1), colours[i % colours.length], 0); }
+}
+// distance from a point to the nearest building, horizontally, for buildings taller than the point
+function clearance(p) {
+  let d = Infinity;
+  for (const b of buildings) if (p[2] < b.h) { const dx = Math.max(b.x0 - p[0], 0, p[0] - b.x1), dy = Math.max(b.y0 - p[1], 0, p[1] - b.y1); d = Math.min(d, Math.hypot(dx, dy)); }
+  return d;
+}
+const inside = (x, y, z) => buildings.some((b) => z < b.h && x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1);
+
+// prop blur disc texture
+
+// ---------- a Crazyflie-style micro quadcopter, real dimensions times S ----------
+
+// air streaks through the street and cross streets, kept out of buildings
+const NP = 700, pP = new Float32Array(NP * 3), seg = new Float32Array(NP * 6), segC = new Float32Array(NP * 6);
+let seed = 5; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const BOX = { x: 16, y: 12, z0: 1, z1: 17, cx: 0 };
+function respawn(i) { do { pP[3 * i] = BOX.cx + (rnd() * 2 - 1) * BOX.x; pP[3 * i + 1] = (rnd() * 2 - 1) * BOX.y; pP[3 * i + 2] = BOX.z0 + rnd() * (BOX.z1 - BOX.z0); } while (inside(pP[3 * i], pP[3 * i + 1], pP[3 * i + 2])); }
+const sGeo = new THREE.BufferGeometry(); sGeo.setAttribute("position", new THREE.BufferAttribute(seg, 3)); sGeo.setAttribute("color", new THREE.BufferAttribute(segC, 3));
+const streaks = new THREE.LineSegments(sGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false })); scene.add(streaks);
+const C_SLOW = new THREE.Color(0xe8f1f8), C_FAST = new THREE.Color(0x0b84c6), tmpC = new THREE.Color();
+
+// drones, route, trails, labels
+const drones = {}, trails = { none: [], ph: [] };
+for (const d of DRONES) {
+  const col = new THREE.Color(css(d.color)), q = makeDrone(col, d.ghost, S); scene.add(q.g);
+  const tGeo = new THREE.BufferGeometry(); tGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(240 * 3), 3));
+  const trail = new THREE.Line(tGeo, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: d.ghost ? 0.5 : 0.85 })); scene.add(trail);
+  const tag = document.createElement("div"); tag.className = d.ghost ? "tag ghost" : "tag"; tag.style.color = css(d.color); $("tags").appendChild(tag);
+  drones[d.key] = { ...q, trail, tag, col };
+}
+let routeReady = false, built = false, centre = new THREE.Vector3();
+fetch("/scene").then((r) => r.json()).then((s) => { if (s.scene !== "city") location.href = "/"; }).catch(() => {});
+fetch("/path").then((r) => r.json()).then((pts) => {
+  const v = pts.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
+  centre = v.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / v.length);
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(v, false), 500, 0.012, 8, false), new THREE.MeshBasicMaterial({ color: 0x1f5fd1, transparent: true, opacity: 0.55 })));
+  BOX.cx = centre.x; sun.target.position.set(centre.x, centre.y, 0);
+  routeReady = true;
+}).catch(() => {});
+
+// ---------- frames ----------
+let frames = [], synced = false;
+const latest = () => frames[frames.length - 1];
+function onFrame(f) {
+  f.arrived = performance.now();
+  if (frames.length && f.t < latest().t) { frames = []; for (const d of DRONES) trails[d.key].length = 0; }
+  frames.push(f); if (frames.length > 6) frames.shift();
+  field = f.field; $("wait").hidden = true;
+  if (!built) { buildCity(field.site); for (let i = 0; i < NP; i++) respawn(i); built = true; }
+  if (!synced) { const [mx, my] = f.controls.mean, sp = Math.hypot(mx, my); ctl.speed = Math.round(sp * 2) / 2; if (sp > 0.2) ctl.dir = Math.round(Math.atan2(my, mx) * 180 / Math.PI / 15) * 15; sync(); synced = true; }
+  for (const d of DRONES) { const r = f.models[d.key], tr = trails[d.key]; if (r.crashed) tr.length = 0; else { tr.push(r.pos); if (tr.length > 240) tr.shift(); } }
+}
+const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
+function current() {
+  if (frames.length < 2) return null;
+  const a = frames[frames.length - 2], b = latest(), s = Math.min(1, (performance.now() - b.arrived) / 20);
+  const L = (u, v) => u.map((x, i) => x + (v[i] - x) * s), out = { t: a.t + (b.t - a.t) * s, ref: L(a.ref, b.ref), models: {} };
+  for (const d of DRONES) {
+    const A = a.models[d.key], B = b.models[d.key];
+    qa.set(A.q[1], A.q[2], A.q[3], A.q[0]); qb.set(B.q[1], B.q[2], B.q[3], B.q[0]);
+    out.models[d.key] = { pos: L(A.pos, B.pos), q: qa.clone().slerp(qb, s), motors: L(A.motors, B.motors), crashed: B.crashed };
+  }
+  return out;
+}
+
+// ---------- camera ----------
+let cam = "follow";
+const wp = new THREE.Vector3(), lastFollow = new THREE.Vector3(), tmpV = new THREE.Vector3();
+// from across the street and slightly behind, looking along the canyon past the solid drone
+function followPoint(out) { drones.ph.g.getWorldPosition(out); out.y += 0.4; out.z += 0.2; return out; }
+function setCam(c) {
+  cam = c; $("cam-follow").setAttribute("aria-pressed", String(c === "follow")); $("cam-over").setAttribute("aria-pressed", String(c === "over"));
+  if (c === "over") { camera.position.set(centre.x - 22, centre.y - 9, centre.z + 12); controls.target.set(centre.x, centre.y, centre.z - 1); }
+  else { followPoint(lastFollow); controls.target.copy(lastFollow); camera.position.copy(lastFollow).add(tmpV.set(-4.8, -4.2, 1.6)); }
+  controls.update();
+}
+$("cam-follow").onclick = () => setCam("follow");
+$("cam-over").onclick = () => setCam("over");
+
+// ---------- draw ----------
+const w3 = [0, 0, 0];
+function draw(dt) {
+  const f = current(); if (!f || !field || !routeReady || !built) return;
+  const fmax = latest().f_max;
+  for (const d of DRONES) {
+    const D = drones[d.key], m = f.models[d.key];
+    D.g.position.set(m.pos[0], m.pos[1], m.pos[2]); D.g.quaternion.copy(m.q);
+    D.props.forEach((p, i) => {
+      const w = 260 * Math.sqrt(Math.max(0, m.motors[i] / fmax)); // drawn slower than real so the eye can follow
+      p.hub.rotation.z += p.dir * w * dt; p.hub.visible = w < 120; p.disc.material.opacity = Math.min(1, w / 120) * (d.ghost ? 0.5 : 1);
+    });
+    const arr = D.trail.geometry.attributes.position.array, tr = trails[d.key];
+    tr.forEach((p, i) => { arr[3 * i] = p[0]; arr[3 * i + 1] = p[1]; arr[3 * i + 2] = p[2]; });
+    D.trail.geometry.setDrawRange(0, tr.length); D.trail.geometry.attributes.position.needsUpdate = true;
+  }
+  for (let i = 0; i < NP; i++) {
+    windAt(pP[3 * i], pP[3 * i + 1], pP[3 * i + 2], f.t, w3);
+    pP[3 * i] += w3[0] * dt; pP[3 * i + 1] += w3[1] * dt;
+    if (Math.abs(pP[3 * i] - BOX.cx) > BOX.x || Math.abs(pP[3 * i + 1]) > BOX.y || inside(pP[3 * i], pP[3 * i + 1], pP[3 * i + 2])) respawn(i);
+    const s = Math.hypot(w3[0], w3[1], w3[2]), L = s > 0.2 ? 0.07 * Math.min(s, 10) / s : 0;
+    seg.set([pP[3 * i] - w3[0] * L, pP[3 * i + 1] - w3[1] * L, pP[3 * i + 2] - w3[2] * L, pP[3 * i], pP[3 * i + 1], pP[3 * i + 2]], 6 * i);
+    tmpC.copy(C_SLOW).lerp(C_FAST, Math.min(1, s / 7));
+    segC.set([tmpC.r, tmpC.g, tmpC.b, tmpC.r, tmpC.g, tmpC.b], 6 * i);
+  }
+  sGeo.attributes.position.needsUpdate = true; sGeo.attributes.color.needsUpdate = true;
+  streaks.visible = Math.hypot(field.mean[0], field.mean[1]) > 0.2 || field.bursts.length > 0;
+  if (cam === "follow") { followPoint(wp); camera.position.add(tmpV.subVectors(wp, lastFollow)); controls.target.copy(wp); lastFollow.copy(wp); }
+  const rect = canvas.getBoundingClientRect();
+  for (const d of DRONES) {
+    const D = drones[d.key], m = f.models[d.key], c = clearance(m.pos);
+    D.g.getWorldPosition(tmpV); tmpV.z += 0.14; tmpV.project(camera);
+    D.tag.hidden = !(tmpV.z < 1 && Math.abs(tmpV.x) < 1.05 && Math.abs(tmpV.y) < 1.05);
+    D.tag.style.left = `${(tmpV.x + 1) / 2 * rect.width}px`; D.tag.style.top = `${(1 - tmpV.y) / 2 * rect.height}px`;
+    D.tag.classList.toggle("danger", c < KEEP);
+    D.tag.textContent = m.crashed ? `${d.label} · crashed, recovering` : `${d.label} · ${c.toFixed(2)} m to wall`;
+  }
+}
+
+function readouts() {
+  const f = latest(); if (!f || !built) return;
+  const m = f.field.mean, sp = Math.hypot(m[0], m[1]), w = f.models.ph.wind, ws = Math.hypot(w[0], w[1]);
+  const [, gc] = falconSiteGain(f.field.site, f.models.ph.pos[0], f.models.ph.pos[2]);
+  $("w-speed").textContent = `Wind ${sp.toFixed(1)} m/s above the roofs`;
+  $("w-note").textContent = f.field.bursts.length ? "gust passing through" : sp < 0.2 ? "calm" : `from the ${compass(Math.atan2(m[1], m[0]) * 180 / Math.PI)}`;
+  $("w-drone").innerHTML = sp < 0.2 && !f.field.bursts.length ? "&nbsp;" : `at the drone ${ws.toFixed(1)} m/s · ${gc > 1.05 ? '<span class="jet">jetting through a cross street</span>' : gc < 0.6 ? "sheltered by the buildings" : "between blocks"}`;
+  for (const d of DRONES) {
+    const r = f.models[d.key], c = clearance(r.pos), e = Math.hypot(r.pos[0] - f.ref[0], r.pos[1] - f.ref[1], r.pos[2] - f.ref[2]);
+    $(`clr-${d.key}`).textContent = r.crashed ? "crash" : c === Infinity ? "–" : c.toFixed(2);
+    $(`meta-${d.key}`).textContent = `${(100 * e).toFixed(0)} cm off the planned pass`;
+    const [cls, txt] = c < KEEP ? ["bad", "too close to the wall"] : c < KEEP + 0.1 ? ["warn", "near the keep-out"] : ["ok", "safe"];
+    const chip = $(`chip-${d.key}`); chip.className = `chip ${cls}`; chip.textContent = txt;
+    $(`card-${d.key}`).classList.toggle("danger", c < KEEP);
+  }
+}
+
+function resize() { const r = canvas.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe($("view"));
+let last = 0, lastUi = 0, started = false;
+function loop(now) {
+  const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now;
+  draw(dt);
+  if (!started && routeReady && built && frames.length >= 2) { setCam("follow"); started = true; }
+  controls.update(); renderer.render(scene, camera);
+  if (now - lastUi > 150) { readouts(); lastUi = now; }
+  requestAnimationFrame(loop);
+}
+function connect() {
+  const es = new EventSource("/stream");
+  es.onopen = () => { $("dot").classList.add("on"); $("conn").textContent = "live simulation"; };
+  es.onmessage = (e) => onFrame(JSON.parse(e.data));
+  es.onerror = () => { $("dot").classList.remove("on"); $("conn").textContent = "reconnecting"; synced = false; };
+}
+camera.position.set(-20, -10, 14); controls.target.set(0, 2, 7);
+sync(); resize(); connect(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
