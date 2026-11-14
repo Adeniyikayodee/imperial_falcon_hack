@@ -11,7 +11,10 @@ POST /control  {"mean": [x, y], "gust": g, "learning": "gentle"|"aggressive",
 GET  /agent    {"ready": bool, "model": ..., "how": ...}: whether the Claude flight engineer can answer
 POST /ask      {"q": "..."}: the engineer drives this demo and streams one JSON event per line
 POST /mission  {"brief": "..."}: the engineer flies a flight-test campaign, files a checked report,
-               then shows the limit on this demo; streams one JSON event per line
+               then shows the limit on this demo; streams one JSON event per line and records it
+               to runs/missions/
+POST /replay   {"speed": 20}: replays the latest recorded mission (or docs/missions/sample.jsonl),
+               driving this demo through the same live steps; no API or network needed
 """
 import argparse
 import json
@@ -25,11 +28,15 @@ import jax
 import numpy as np
 
 import falcon  # noqa: F401
+from agent import tools
 from agent.run import BRIEF, engineer, mission, status
+from falcon import track
 from falcon.live import LEARNING, Live
 from falcon.traj import TRAJECTORIES
 
-WEB = Path(__file__).resolve().parent.parent / "web"
+ROOT = Path(__file__).resolve().parent.parent
+WEB = ROOT / "web"
+SAMPLE = ROOT / "docs" / "missions" / "sample.jsonl"
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8"}
 FRAME_S = 0.02
 SCENES = {
@@ -134,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.ask(str(body.get("q", "")).strip()[:2000], engineer)
             if self.path == "/mission":
                 return self.ask(str(body.get("brief", "")).strip()[:2000] or BRIEF, mission)
+            if self.path == "/replay":
+                return self.replay(min(max(float(body.get("speed", 20)), 1.0), 200.0))
             if self.path != "/control":
                 return self.send(404, b'{"error": "not found"}')
             STAGE.control(body)
@@ -149,12 +158,58 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(400, b'{"error": "empty question"}')
         if not STAGE.asking.acquire(blocking=False):
             return self.send(409, b'{"error": "the engineer is already flying a question"}')
+        rec = None
         try:
             self.send_response(200)
             self.send_header("Content-Type", "application/x-ndjson")
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
+            t0 = time.monotonic()
+            if agent is mission:
+                (track.RUNS / "missions").mkdir(parents=True, exist_ok=True)
+                rec = open(track.RUNS / "missions" / f"mission-{time.strftime('%Y%m%d-%H%M%S')}.jsonl", "w")
+                rec.write(json.dumps({"t": 0.0, "type": "brief", "text": q}) + "\n")
             for e in agent(q, STAGE):
+                if rec:
+                    rec.write(json.dumps({"t": round(time.monotonic() - t0, 2), **e}) + "\n")
+                    rec.flush()
+                self.wfile.write(json.dumps(e).encode() + b"\n")
+                self.wfile.flush()
+            self.wfile.write(b'{"type": "done"}\n')
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            if rec:
+                rec.close()
+            STAGE.asking.release()
+
+    def replay(self, speed: float):
+        """Play back a recorded mission, compressing idle time by `speed` but running its live steps on
+        this demo in real time, so the audience still sees the gust arrive."""
+        found = sorted((track.RUNS / "missions").glob("mission-*.jsonl"))
+        path = found[-1] if found else SAMPLE
+        if not path.is_file():
+            return self.send(404, b'{"error": "no recorded mission yet; run one with Clear for flight"}')
+        if not STAGE.asking.acquire(blocking=False):
+            return self.send(409, b'{"error": "the engineer is already flying"}')
+        live = tools.Live(STAGE)
+        acts = {"live_set": lambda i: live.live_set(**i), "live_gust": lambda i: live.live_gust(),
+                "live_reset": lambda i: live.live_reset()}
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            prev = 0.0
+            for line in path.read_text().splitlines():
+                e = json.loads(line)
+                t = e.pop("t", prev)
+                time.sleep(min(max(t - prev, 0.0) / speed, 1.5))
+                prev = t
+                if e["type"] == "tool" and e["name"] in acts:
+                    acts[e["name"]](e["input"])
+                if e["type"] == "tool" and e["name"] == "live_watch":
+                    time.sleep(min(float(e["input"].get("seconds", 10)), 6.0))
                 self.wfile.write(json.dumps(e).encode() + b"\n")
                 self.wfile.flush()
             self.wfile.write(b'{"type": "done"}\n')

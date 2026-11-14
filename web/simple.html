@@ -143,7 +143,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ph); outlin
 
   <div class="eng">
     <div class="who"><span>Flight engineer&nbsp;<span class="meta" id="eng-model">Claude</span></span><span class="chip" id="eng-state">checking</span></div>
-    <form id="eng-form"><input id="eng-q" aria-label="Question or mission brief for the flight engineer" placeholder="Checking for Claude credentials..." disabled><button class="act" id="eng-go" disabled>Ask</button><button class="act" id="mis-go" type="button" disabled title="Identify, predict, expand the envelope, report with every number checked, then fly the limit live">Clear for flight</button></form>
+    <form id="eng-form"><input id="eng-q" aria-label="Question or mission brief for the flight engineer" placeholder="Checking for Claude credentials..." disabled><button class="act" id="eng-go" disabled>Ask</button><button class="act" id="mis-go" type="button" disabled title="Identify, predict, expand the envelope, report with every number checked, then fly the limit live">Clear for flight</button><button class="act" id="mis-replay" type="button" title="Replay the last recorded mission at speed; no API or network needed">Replay</button></form>
     <div class="mission" id="mission" hidden>
       <div class="steps" id="steps"></div>
       <div class="eng-log" id="eng-log" style="max-height:520px"></div>
@@ -699,6 +699,7 @@ function onEvent(ev) {
   if (ev.type === "tool") engLine("tool", `→ ${ev.name}(${Object.entries(ev.input).map(([k, v]) => `${k}=${k === "report" ? "…" : v}`).join(", ")})`);
   else if (ev.type === "code") engLine("code", `$ ${ev.input.code || ev.input.command || JSON.stringify(ev.input)}`);
   else if (ev.type === "code_result") engLine("code", ev.stdout || ev.stderr || ev.error || "");
+  else if (ev.type === "brief") engLine("q", `Brief: ${ev.text}`);
   else if (ev.type === "note") { if (ev.text.trim()) engLine("note", ev.text.trim()); }
   else if (ev.type === "run") {
     runs.push(ev); drawEnv(); const k = ev.metrics, q = ev.params;
@@ -711,7 +712,7 @@ function onEvent(ev) {
 }
 async function engRun(path, body, title, isMission) {
   if (engBusy) return;
-  stopDemo(); engBusy = true; $("eng-go").disabled = $("mis-go").disabled = true;
+  stopDemo(); engBusy = true; $("eng-go").disabled = $("mis-go").disabled = $("mis-replay").disabled = true;
   $("mission").hidden = false; $("eng-log").textContent = ""; $("report").hidden = true; runs = []; step = -1;
   $("steps").hidden = !isMission; $("env").parentElement.hidden = !isMission; if (isMission) { setStep(0); drawEnv(); }
   engLine("q", title);
@@ -730,9 +731,10 @@ async function engRun(path, body, title, isMission) {
     }
   } catch { engLine("err", "lost connection to the demo server"); }
   if (isMission && !$("report").hidden) setStep(STEPS.length);
-  engBusy = false; $("eng-q").disabled = $("eng-go").disabled = $("mis-go").disabled = !engReady;
+  engBusy = false; $("eng-q").disabled = $("eng-go").disabled = $("mis-go").disabled = !engReady; $("mis-replay").disabled = false;
 }
 $("eng-form").onsubmit = (e) => { e.preventDefault(); const q = $("eng-q").value.trim(); if (q) engRun("/ask", { q }, q, false); };
+$("mis-replay").onclick = () => engRun("/replay", { speed: 20 }, "Replay of a recorded mission (20× speed, live steps in real time)", true);
 $("mis-go").onclick = () => { const b = $("eng-q").value.trim(); engRun("/mission", { brief: b }, b || "Mission: clear the drone for tomorrow's line inspection, 3 to 5 m/s toward the line, gusty.", true); };
 engStatus();
 
