@@ -1,21 +1,44 @@
 # Falcon
 
-**An autonomous flight-test engineer for inspection drones.**
+**An autonomous flight-test engineer for inspection drones. It clears a drone to fly, sets its
+limits, or grounds it.**
 
-Give Falcon a one-line brief, such as "clear the drone for tomorrow's power-line pass near South
-Kensington", and a Claude agent runs the whole flight-test campaign on its own. It files a GO /
-NO-GO report in which every number has been checked against the flight log.
+Give Falcon a one-line brief and a Claude agent runs the whole flight-test campaign on its own:
+forecast, test flights, prediction and report. Work that takes a flight-test engineer days finishes
+in under 8 minutes, and every number in the report is checked against the flight log.
 
 Built at the Imperial AI Hackathon 2026 for the Autonomous Agents track.
 
 ![Three drones fly the same gust beside a high-voltage line](docs/demo.jpg)
 
+## A recorded mission
+
+> Clear the drone for tomorrow's power-line inspection pass at 20 m near South Kensington, London.
+
+The forecast came back at 4.7 m/s with 10.7 m/s gusts. Falcon flew 35 test runs, fitted a drag law
+and predicted the envelope edge at 7.3 m/s. Testing in turbulence put the real edge between 4 and
+5 m/s. It filed:
+
+> **Decision: NO-GO for tomorrow as forecast. GO WITH LIMITS only if on-site wind measures inside
+> the limits below.**
+>
+> - Mean wind ≤ 2 m/s at 10 m, any direction.
+> - Controller ph only, learning rate 0.05.
+>
+> | Case | rms | max |
+> |---|---|---|
+> | 2 m/s −x (worst), ph | 0.9 cm [rf8524b.rmse_m] | 4.3 cm [rf8524b.max_err_m] |
+> | 5 m/s +y, ph | 18.2 cm [r45017e.rmse_m] | 43.8 cm [r45017e.max_err_m] |
+
+Each figure carries the ID of the run it came from, and `ph` is Falcon's learner. The full mission
+is in [docs/missions/sample.jsonl](docs/missions/sample.jsonl) and replays in the demo.
+
 ## The problem
 
-Drones inspect power lines a metre or two from the wire, in wind they can't see. Someone has to
-decide whether a drone is safe to fly and under what limits, and today that takes a flight-test
-engineer days. An AI agent can only take over that job if it can't skip safety steps and can't make
-up a number.
+Drones inspect power lines a metre or two from the wire, in gusts that arrive unannounced.
+Someone has to decide whether a drone is safe to fly and under what limits, and today that takes a
+flight-test engineer days. An AI agent earns that job only if it follows every safety step and
+reports only numbers it measured.
 
 ## How it works
 
