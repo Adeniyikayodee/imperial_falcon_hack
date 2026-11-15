@@ -50,15 +50,18 @@ reports only numbers it measured.
 5. **Reconcile:** explains where the prediction missed, using physics it measured.
 6. **Report and show:** files the decision with operating limits, then flies that limit live.
 
-These checks are enforced in code, not in the prompt:
+## Why you can trust it
 
-- **Build-up rule.** The tools refuse any step more than 2 m/s past the last wind cleared, and
-  anything at or above a wind that crashed.
-- **Report checker.** Every number must cite a run, like `2.1 cm [r8b3739.rmse_m]`. Misquoted or
-  uncited numbers are rejected until the agent fixes them.
-- **One wind field** for batch tests and the live demo.
-- **A learner that can't add energy.** The drone's learned force, `F = -D (v - ŵ)` with
-  `0 < D < d_max`, only removes energy, for any weights.
+The safety rules live in code, outside the prompt:
+
+- **Build-up rule.** Each test step stays within 2 m/s of the last wind cleared and below any wind
+  that crashed. The tools refuse anything else.
+- **Report checker.** Every number cites a run, like `2.1 cm [r8b3739.rmse_m]`. The checker reads
+  the run log and returns misquoted or uncited figures to the agent until they match.
+- **One wind field** for batch tests and the live demo, so a clearance means what it says. This
+  rule caught a real bug: an early live check crashed at a limit the batch tests had cleared.
+- **A learner that only removes energy.** The drone's learned force is a bounded drag,
+  `F = -D (v - ŵ)` with `0 < D < d_max`, so it stays stable for any weights.
 
 The full physics write-up is in [docs/physics.md](docs/physics.md).
 
