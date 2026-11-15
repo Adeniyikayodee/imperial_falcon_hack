@@ -7,8 +7,8 @@ Give Falcon a one-line brief and a Claude agent runs the whole flight-test campa
 forecast, test flights, prediction and report. Work that takes a flight-test engineer days finishes
 in under 8 minutes, and every number in the report is checked against the flight log.
 
-Built at the Imperial AI Hackathon 2026 for the Autonomous Agents track, on the Anthropic API,
-Linkup and Databricks MLflow.
+A solo entry, built at the Imperial AI Hackathon 2026 for the Autonomous Agents track, on the
+Anthropic API, Linkup and Databricks MLflow.
 
 ![Three drones fly the same gust beside a high-voltage line](docs/demo.jpg)
 
@@ -116,6 +116,15 @@ To run the tests: `uv run --extra agent pytest` (57 tests).
 - **Libraries:** JAX, NumPy, the anthropic SDK, MLflow, matplotlib, three.js (r128) with
   OrbitControls, and pytest.
 - **Tooling and assets:** uv, hatchling, and IBM Plex fonts from Google Fonts.
+
+## Timeline
+
+The simulator core was prototyped on 12 and 13 November, before the event. Built at the hackathon:
+
+- the autonomous mission agent, the build-up rule and the report checker;
+- Linkup and Databricks;
+- measured force and torque, and the unified wind;
+- the mission panel and replay.
 
 ## Limits
 
