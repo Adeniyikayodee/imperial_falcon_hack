@@ -7,7 +7,8 @@ Give Falcon a one-line brief and a Claude agent runs the whole flight-test campa
 forecast, test flights, prediction and report. Work that takes a flight-test engineer days finishes
 in under 8 minutes, and every number in the report is checked against the flight log.
 
-Built at the Imperial AI Hackathon 2026 for the Autonomous Agents track.
+Built at the Imperial AI Hackathon 2026 for the Autonomous Agents track, on the Anthropic API,
+Linkup and Databricks MLflow.
 
 ![Three drones fly the same gust beside a high-voltage line](docs/demo.jpg)
 
@@ -91,7 +92,7 @@ uv run --extra agent python scripts/live.py       # open http://localhost:8765
 ```
 
 - **Clear for flight** runs a mission, which takes about 10 minutes.
-- **Replay** plays a recorded mission at 20× speed, with no API needed.
+- **Replay** plays a recorded mission at 20× speed, fully offline.
 - **Run demo** plays scripted gusts.
 
 To run a mission from the terminal:
@@ -107,11 +108,16 @@ To run the tests: `uv run --extra agent pytest` (57 tests).
 - **Models:**
   - Claude Fable 5.2 through the Anthropic API, using the tool runner and code execution. Claude
     Opus 5.5 is optional.
-  - The drone's learned models are mine and are trained online in every flight. No pretrained
-    weights.
+  - The drone's learned models are mine and train online from scratch in every flight.
 - **APIs:** Anthropic, the Linkup Search API, and Databricks MLflow.
-- **Datasets:** none. All flight data comes from my simulator.
+- **Datasets:** all flight data comes from my simulator.
 - **Libraries:** JAX, NumPy, the anthropic SDK, MLflow, three.js (r128) and pytest.
+
+## Limits
+
+- Simulation only, on an open site. The energy bound covers the learned model; extending it to the
+  full closed loop is next.
+- Sensor noise and motor lag use assumed values.
 
 ## Project structure
 
