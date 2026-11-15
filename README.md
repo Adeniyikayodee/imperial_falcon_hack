@@ -110,8 +110,12 @@ To run the tests: `uv run --extra agent pytest` (57 tests).
     Opus 5.5 is optional.
   - The drone's learned models are mine and train online from scratch in every flight.
 - **APIs:** Anthropic, the Linkup Search API, and Databricks MLflow.
-- **Datasets:** all flight data comes from my simulator.
-- **Libraries:** JAX, NumPy, the anthropic SDK, MLflow, three.js (r128) and pytest.
+- **Data:**
+  - Flight data comes from my simulator.
+  - Live wind forecasts come through Linkup; the recorded mission cites Windy.app.
+- **Libraries:** JAX, NumPy, the anthropic SDK, MLflow, matplotlib, three.js (r128) with
+  OrbitControls, and pytest.
+- **Tooling and assets:** uv, hatchling, and IBM Plex fonts from Google Fonts.
 
 ## Limits
 
