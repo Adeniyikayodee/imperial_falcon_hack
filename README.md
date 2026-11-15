@@ -68,16 +68,18 @@ The full physics write-up is in [docs/physics.md](docs/physics.md).
 ## Results
 
 Inspection pass at 20 m: wind given at 10 m, surface-layer turbulence and a 2 m/s gust front.
-Tracking error in cm over 10 seeds.
+Tracking error in cm over 10 seeds, lower is better. *Baseline* is the flight controller alone,
+*Neural net* adds an online MLP, and *Learner* adds Falcon's energy-safe model.
 
-| | No model | Neural net | Learner |
+| | Baseline | Neural net | Learner |
 |---|---:|---:|---:|
 | 3 m/s | 3.2 ± 0.2 | 2.8 ± 0.3 | **1.0 ± 0.1** |
 | 4 m/s | 4.5 ± 1.1 | 3.8 ± 0.9 | **2.1 ± 1.1** |
-| 4 m/s, learning 10× faster | **4.5 ± 1.1** | 30.5 ± 8.2 | 7.6 ± 2.7 |
+| 4 m/s, stress test: learning 10× faster | 4.5 ± 1.1 | 30.5 ± 8.2 | 7.6 ± 2.7 |
 
-The learner is 2 to 3× tighter than no model. A typical mission clears 3.5 m/s, below an edge
-between 4 and 5 m/s.
+The learner tracks 2 to 3× tighter than the baseline. Under the stress test the neural net diverges
+to 30 cm while the learner stays bounded, which is why the agent locks the learning rate at 0.05.
+A typical mission clears 3.5 m/s, below an edge between 4 and 5 m/s.
 
 ## Quick start
 
