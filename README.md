@@ -117,15 +117,6 @@ To run the tests: `uv run --extra agent pytest` (57 tests).
   OrbitControls, and pytest.
 - **Tooling and assets:** uv, hatchling, and IBM Plex fonts from Google Fonts.
 
-## Timeline
-
-The simulator core was prototyped on 12 and 13 November, before the event. Built at the hackathon:
-
-- the autonomous mission agent, the build-up rule and the report checker;
-- Linkup and Databricks;
-- measured force and torque, and the unified wind;
-- the mission panel and replay.
-
 ## Limits
 
 - Simulation only, on an open site. The energy bound covers the learned model; extending it to the
