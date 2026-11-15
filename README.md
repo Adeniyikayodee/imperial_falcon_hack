@@ -139,5 +139,5 @@ falcon/   simulator, controller, wind, learned models, experiments
 agent/    mission, tools, build-up rule, report checker
 scripts/  demo server with recording and replay, envelope sweep
 web/      3D demo page
-docs/     physics, presentation script, sample mission
+docs/     physics, sample mission
 ```
