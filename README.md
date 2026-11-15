@@ -34,11 +34,30 @@ and predicted the envelope edge at 7.3 m/s. Testing in turbulence put the real e
 Each figure carries the ID of the run it came from, and `ph` is Falcon's learner. The full mission
 is in [docs/missions/sample.jsonl](docs/missions/sample.jsonl) and replays in the demo.
 
-## The problem
+## Inspiration
 
-Drones inspect power lines a metre or two from the wire, in gusts that arrive unannounced.
-Someone has to decide whether a drone is safe to fly and under what limits, and today that takes a
-flight-test engineer days. An AI agent earns that job only if it follows every safety step and
+**Across the world, the grid breaks in the wind, and the people who inspect it fly into that same
+wind.**
+
+In 2012, 620 million people in India lost power in a single afternoon
+([CS Monitor](https://www.csmonitor.com/World/Latest-News-Wires/2012/0731/World-s-biggest-blackout-620-million-people-without-power-in-India)).
+In 2018, one transmission line in California started the Camp Fire and 85 people died
+([Insurance Journal](https://insurancejournal.com/news/west/2019/05/15/526625.htm)). In 2023, wind
+toppled power lines on Maui and 102 people died in Lahaina
+([Claims Journal](https://www.claimsjournal.com/news/national/2024/08/05/325509.htm)).
+
+- **Almost $300 billion a year.** Infrastructure disruptions led by blackouts cost firms across 137
+  developing economies close to that
+  ([World Bank](https://documents1.worldbank.org/curated/ar/336371560797230631/pdf/Underutilized-Potential-The-Business-Costs-of-Unreliable-Infrastructure-in-Developing-Countries.pdf)).
+- **Wind leads the causes.** Weather caused 80% of major US outages from 2000 to 2023, wind and
+  storms 58%, with twice as many in the last decade as the first
+  ([Climate Central](https://www.climatecentral.org/report/weather-related-power-outages-rising)).
+- **Inspection is dangerous work.** Crews patrol by helicopter metres from live wires, and about one
+  wire strike in three is fatal
+  ([Aviation Week](https://aviationweek.com/business-aviation/how-avoid-helicopter-wire-strikes)).
+
+Drones take people out of that air, and someone still has to clear each one to fly. Today that takes
+a flight-test engineer days. An AI agent earns that job only if it follows every safety step and
 reports only numbers it measured.
 
 ## How it works
