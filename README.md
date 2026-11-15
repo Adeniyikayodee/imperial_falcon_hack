@@ -60,6 +60,22 @@ Drones take people out of that air, and someone still has to clear each one to f
 a flight-test engineer days. An AI agent earns that job only if it follows every safety step and
 reports only numbers it measured.
 
+## The physics problem
+
+Measured on Falcon's simulated 27 g Crazyflie 2.x:
+
+- **It fights wind only by tilting.** At its 0.6 rad tilt limit it pushes back with **0.18 N**, on
+  a thrust-to-weight ratio of 2.3.
+- **Drag outgrows the wind.** Doubling the wind from 2 to 4 m/s multiplied drag by **2.5**, and at
+  4 m/s drag spends **42%** of the tilt budget.
+- **Gusts break the budget.** The recorded forecast gust of 10.7 m/s works out to **1.8×** the most
+  force the drone can make.
+- **The margin is a metre or two.** At 5 m/s in turbulence it swung up to **44 cm**.
+- **Steady-air maths overestimates the limit.** The drag fit predicted 7.3 m/s; turbulence put the
+  real edge at **4–5 m/s**, and tracking error grew **75×**.
+
+The true limit lives in turbulence, and only careful test flights reveal it.
+
 ## How it works
 
 1. **Forecast:** looks up the site's wind through Linkup and cites the source.
